@@ -1,0 +1,186 @@
+<?xml version="1.0" ?>
+<robot name="low-cost-arm">
+  <link name="base_link">
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+  </link>
+  <link name="robot_base">
+    <inertial>
+      <origin rpy="0 0 0" xyz="-1.6196165020213455e-05 0.04676572591178276 0.014449624355634582"/>
+      <mass value="0.06752363433035656"/>
+      <inertia ixx="4e-05" ixy="-0.0" ixz="-0.0" iyy="3.8e-05" iyz="-9e-06" izz="5.9e-05"/>
+    </inertial>
+    <visual>
+      <origin rpy="1.5708 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="assets/base_link_visible.obj" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <color rgba="0.700 0.700 0.700 1.000"/>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="assets/base_link.obj" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </collision>
+  </link>
+  <link name="first-bracket-motor_1">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0.0011215335520915035 -0.011960095984038348 0.012424221873872536"/>
+      <mass value="0.050669759178187244"/>
+      <inertia ixx="1.4e-05" ixy="-0.0" ixz="-0.0" iyy="9e-06" iyz="-0.0" izz="1.5e-05"/>
+    </inertial>
+    <visual>
+      <origin rpy="0 0 0" xyz="-0.00025 -0.06875 -0.0409"/>
+      <geometry>
+        <mesh filename="assets/first-bracket-motor_1.obj" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <color rgba="0.700 0.700 0.700 1.000"/>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="-0.00025 -0.06875 -0.0409"/>
+      <geometry>
+        <mesh filename="assets/first-bracket-motor_1.obj" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </collision>
+  </link>
+  <link name="shoulder-to-elbow-motor_v1_1">
+    <inertial>
+      <origin rpy="0 0 0" xyz="-0.0191542760740305 -0.0012683813577475112 0.07144141167892787"/>
+      <mass value="0.05261369068977079"/>
+      <inertia ixx="7e-05" ixy="0.0" ixz="0.0" iyy="7.2e-05" iyz="-5e-06" izz="1.1e-05"/>
+    </inertial>
+    <visual>
+      <origin rpy="0 0 0" xyz="-0.01945 -0.06895 -0.05515"/>
+      <geometry>
+        <mesh filename="assets/shoulder-to-elbow-motor_v1_1.obj" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <color rgba="0.700 0.700 0.700 1.000"/>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="-0.01945 -0.06895 -0.05515"/>
+      <geometry>
+        <mesh filename="assets/shoulder-to-elbow-motor_v1_1.obj" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </collision>
+  </link>
+  <link name="elbow-to-wrist-motor-reference_v1_1">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0.01951468809363352 0.026076660011439212 2.3261768583027198e-05"/>
+      <mass value="0.02059907441055582"/>
+      <inertia ixx="3e-06" ixy="-0.0" ixz="0.0" iyy="3e-06" iyz="-0.0" izz="5e-06"/>
+    </inertial>
+    <visual>
+      <origin rpy="0 0 0" xyz="0.0143 -0.08375 -0.16345"/>
+      <geometry>
+        <mesh filename="assets/elbow-to-wrist-motor-reference_v1_1.obj" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <color rgba="0.700 0.700 0.700 1.000"/>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="0.0143 -0.08375 -0.16345"/>
+      <geometry>
+        <mesh filename="assets/elbow-to-wrist-motor-reference_v1_1.obj" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </collision>
+  </link>
+  <link name="gripper-static-motor_v2_1">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0.005421565533833407 0.019034667992307075 0.00011281388318701291"/>
+      <mass value="0.030801959916802346"/>
+      <inertia ixx="9e-06" ixy="-2e-06" ixz="-0.0" iyy="6e-06" iyz="-0.0" izz="1.1e-05"/>
+    </inertial>
+    <visual>
+      <origin rpy="0 0 0" xyz="0.000893 -0.128688 -0.163437"/>
+      <geometry>
+        <mesh filename="assets/gripper-static-motor_v2_1.obj" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <color rgba="0.700 0.700 0.700 1.000"/>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="0.000893 -0.128688 -0.163437"/>
+      <geometry>
+        <mesh filename="assets/gripper-static-motor_v2_1.obj" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </collision>
+  </link>
+  <link name="gripper-moving-part-dumb_v2_1">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0.001094897934895013 0.025115003984107043 -0.01445125352746443"/>
+      <mass value="0.013583445641331692"/>
+      <inertia ixx="4e-06" ixy="-0.0" ixz="-0.0" iyy="2e-06" iyz="-0.0" izz="3e-06"/>
+    </inertial>
+    <visual>
+      <origin rpy="0 0 0" xyz="0.008443 -0.141678 -0.177687"/>
+      <geometry>
+        <mesh filename="assets/gripper-moving-part-dumb_v2_1.obj" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <color rgba="0.700 0.700 0.700 1.000"/>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="0.008443 -0.141678 -0.177687"/>
+      <geometry>
+        <mesh filename="assets/gripper-moving-part-dumb_v2_1.obj" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </collision>
+  </link>
+  <joint name="base_weld" type="fixed">
+    <origin rpy="0 0 0" xyz="0 0 0"/>
+    <parent link="base_link"/>
+    <child link="robot_base"/>
+  </joint>
+  <joint name="joint_2" type="continuous">
+    <origin rpy="0 0 0" xyz="0.00025 0.06875 0.0409"/>
+    <parent link="robot_base"/>
+    <child link="first-bracket-motor_1"/>
+    <axis xyz="0.0 0.0 1.0"/>
+  </joint>
+  <joint name="joint_3" type="continuous">
+    <origin rpy="0 0 0" xyz="0.0192 0.0002 0.01425"/>
+    <parent link="first-bracket-motor_1"/>
+    <child link="shoulder-to-elbow-motor_v1_1"/>
+    <axis xyz="1.0 0.0 0.0"/>
+  </joint>
+  <joint name="joint_5" type="continuous">
+    <origin rpy="0 0 0" xyz="-0.03375 0.0148 0.1083"/>
+    <parent link="shoulder-to-elbow-motor_v1_1"/>
+    <child link="elbow-to-wrist-motor-reference_v1_1"/>
+    <axis xyz="1.0 -0.0 0.0"/>
+  </joint>
+  <joint name="joint_6" type="continuous">
+    <origin rpy="0 0 0" xyz="0.013407 0.044938 -1.3e-05"/>
+    <parent link="elbow-to-wrist-motor-reference_v1_1"/>
+    <child link="gripper-static-motor_v2_1"/>
+    <axis xyz="-0.0 -1.0 0.0"/>
+  </joint>
+  <joint name="joint_7" type="continuous">
+    <origin rpy="0 0 0" xyz="-0.00755 0.01299 0.01425"/>
+    <parent link="gripper-static-motor_v2_1"/>
+    <child link="gripper-moving-part-dumb_v2_1"/>
+    <axis xyz="-0.0 -0.0 -1.0"/>
+  </joint>
+  <transmission type="SimpleTransmission" name="joint_2_transmission">
+    <actuator name="joint_2_actuator"/>
+    <joint name="joint_2"/>
+    <mechanicalReduction>1</mechanicalReduction>
+  </transmission>
+  <transmission type="SimpleTransmission" name="joint_3_transmission">
+    <actuator name="joint_3_actuator"/>
+    <joint name="joint_3"/>
+    <mechanicalReduction>1</mechanicalReduction>
+  </transmission>
+  <transmission type="SimpleTransmission" name="joint_5_transmission">
+    <actuator name="joint_5_actuator"/>
+    <joint name="joint_5"/>
+    <mechanicalReduction>1</mechanicalReduction>
+  </transmission>
+  <transmission type="SimpleTransmission" name="joint_6_transmission">
+    <actuator name="joint_6_actuator"/>
+    <joint name="joint_6"/>
+    <mechanicalReduction>1</mechanicalReduction>
+  </transmission>
+  <transmission type="SimpleTransmission" name="joint_7_transmission">
+    <actuator name="joint_7_actuator"/>
+    <joint name="joint_7"/>
+    <mechanicalReduction>1</mechanicalReduction>
+  </transmission>
+</robot>

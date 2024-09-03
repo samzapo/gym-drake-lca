@@ -1,3 +1,4 @@
+import argparse
 import gymnasium as gym
 import matplotlib.pyplot as plt
 import numpy as np
@@ -35,6 +36,7 @@ from pydrake.systems.framework import (
     DiagramBuilder,
     EventStatus,
     LeafSystem,
+    PortDataType,
 )
 from pydrake.systems.primitives import (
     ConstantVectorSource,
@@ -49,6 +51,10 @@ from pydrake.visualization import AddDefaultVisualization
 
 
 class LiftCubeEnv(DrakeGymEnv):
+    metadata = {"render_modes": ["human", "rgb_array"],
+                "observation_modes": ["image", "state", "both"],
+                "action_modes": ["joint", "ee"], }
+
     def __init__(self,
                  observation_mode="image",
                  action_mode="joint",
@@ -58,6 +64,25 @@ class LiftCubeEnv(DrakeGymEnv):
                  obs_noise=False,
                  monitoring_camera=False,
                  add_disturbances=False):
+        assert render_mode in self.metadata["render_modes"]
+        assert observation_mode in self.metadata["observation_modes"]
+        assert action_mode in self.metadata["action_modes"]
+
+        self.camera_intrinsics = {
+            "front_camera": CameraInfo(640, 640, np.pi / 4),
+            "top_camera": CameraInfo(640, 640, np.pi / 4),
+            "viz_camera": CameraInfo(640, 640, np.pi / 4),
+        }
+
+        def normalize(x):
+            return x / np.linalg.norm(x)
+
+        self.X_PB = {
+            "front_camera": RigidTransform(RotationMatrix.MakeYRotation(-np.pi / 2), np.array([0.049, 0.888, 0.317])),
+            "top_camera": RigidTransform(RotationMatrix.Identity(), np.array([0, 0, 1])),
+            "viz_camera": RigidTransform(RotationMatrix(Quaternion(wxyz=normalize([-0.15, -0.1, 0.6, 1]))), np.array([-0.1, 0.6, 0.3])),
+        }
+
         self.observation_mode = observation_mode
         self.action_mode = action_mode
         # Gym parameters.
@@ -77,8 +102,6 @@ class LiftCubeEnv(DrakeGymEnv):
                                             obs_noise=obs_noise,
                                             monitoring_camera=monitoring_camera,
                                             add_disturbances=add_disturbances)
-
-        plant = simulator.get_system().GetSubsystemByName("plant")
 
         # Set the action space
         self.action_mode = action_mode
@@ -139,17 +162,14 @@ class LiftCubeEnv(DrakeGymEnv):
 
         builder = DiagramBuilder()
 
-        # Add Visualizer to Diagram
-        if enable_meshcat_viz:
-            AddDefaultVisualization(builder=builder)
-
         multibody_plant_config = MultibodyPlantConfig(
-            time_step=sim_time_step,
+            time_step=self.sim_time_step,
             contact_model=self.contact_model,
             discrete_contact_approximation=self.contact_approximation,
         )
 
         plant, scene_graph = AddMultibodyPlant(multibody_plant_config, builder)
+        plant.set_name("plant")
 
         gravity_vector = np.array([0.0, 0.0, -9.81])
         plant.mutable_gravity_field().set_gravity_vector(gravity_vector)
@@ -158,34 +178,43 @@ class LiftCubeEnv(DrakeGymEnv):
         robot_model_instance = self.AddModels(plant)
         plant.Finalize()
 
+        # Add Visualizer to Diagram
+        if enable_meshcat_viz:
+            AddDefaultVisualization(builder=builder)
+
         nq = plant.num_positions(model_instance=robot_model_instance)
         nv = plant.num_velocities(model_instance=robot_model_instance)
 
         #########################################################################
         # Actions
 
+        # TODO: Add IK solver for 'ee' mode.
+        assert self.action_mode != "ee"
+
         # TODO: This is a tunable parameter, put it somewhere accessible!
         kp = np.ones(nq)*20.0
         ki = np.zeros(nq)
         kd = np.ones(nv)*0.1
-        pid_controller = PidController(kp=kp, ki=ki, kd=kd)
+        pid_controller = builder.AddSystem(PidController(kp=kp, ki=ki, kd=kd))
+        pid_controller.set_name("pid_controller")
 
         desired_velocities = builder.AddSystem(ConstantVectorSource([0]*nv))
+        desired_velocities.set_name("desired_velocities")
 
-        state_mux = Multiplexer(input_sizes=[nq, nv])
-        state_demux = Demultiplexer(input_sizes=[nq, nv])
+        state_mux = builder.AddSystem(Multiplexer(input_sizes=[nq, nv]))
+        state_mux.set_name("state_mux")
 
         builder.ExportInput(state_mux.get_input_port(0),
-                            "actions")  # [q] desired state
+                            "actions")  # [q] desired positions
 
         builder.Connect(desired_velocities.get_output_port(),
-                        state_mux.get_input_port(1))  # [v] desired state
+                        state_mux.get_input_port(1))  # [v] desired velocities
 
         builder.Connect(state_mux.get_output_port(0),  # [q v] desired state
                         pid_controller.get_input_port_desired_state())
 
-        builder.Connect(plant.get_state_output_port(),  # FIXME: demux robot state out of this vector
-                        pid_controller.get_input_port_estimated_state())  # [q v] current state
+        builder.Connect(plant.get_state_output_port(robot_model_instance),  # [q v] all current states
+                        pid_controller.get_input_port_estimated_state())
 
         builder.Connect(pid_controller.get_output_port(),  # [u] actuation
                         plant.get_actuation_input_port(robot_model_instance))
@@ -199,9 +228,10 @@ class LiftCubeEnv(DrakeGymEnv):
                 # TODO: This is a tunable parameter, put it somewhere accessible!
                 self.threshold_height = 0.5
 
-                self.DeclareVectorInputPort("state", nq + nv)
+                self.DeclareVectorInputPort(
+                    "state", plant.num_multibody_states())
                 self.DeclareVectorOutputPort("reward", 1, self.CalcReward)
-                # fixme: not thread safe.
+                # FIXME: not thread safe.
                 self.plant_context = plant.CreateDefaultContext()
 
             def CalcReward(self, context, output):
@@ -227,7 +257,9 @@ class LiftCubeEnv(DrakeGymEnv):
                 output[0] = reward
 
         reward = builder.AddSystem(RewardSystem())
-        builder.Connect(plant.get_state_output_port(robot_model_instance),
+        reward.set_name("reward")
+
+        builder.Connect(plant.get_state_output_port(),
                         reward.get_input_port(0))
         builder.ExportOutput(reward.get_output_port(), "reward")
 
@@ -237,18 +269,10 @@ class LiftCubeEnv(DrakeGymEnv):
         if monitoring_camera or (self.observation_mode in ["image", "both"]):
             scene_graph.AddRenderer(
                 "renderer", MakeRenderEngineVtk(RenderEngineVtkParams()))
-            self.camera_intrinsics = {"front_camera": CameraInfo(640, 640, np.pi / 4),
-                                      "top_camera": CameraInfo(640, 640, np.pi / 4),
-                                      "viz_camera": CameraInfo(640, 640, np.pi / 4),
-                                      }
 
-            X_PB = {"front_camera": RigidTransform(RotationMatrix.MakeYRotation(-np.pi / 2), np.array([0.049, 0.888, 0.317])),
-                    "top_camera": RigidTransform(RotationMatrix.Identity(), np.array([0, 0, 1])),
-                    "viz_camera": RigidTransform(RotationMatrix(Quaternion(wxyz=[-0.15, -0.1, 0.6, 1])), np.array([-0.1, 0.6, 0.3])),
-                    }
             self.cameras = {}
 
-            for camera_name, intrinsics in self.camera_intrinsics:
+            for camera_name, intrinsics in self.camera_intrinsics.items():
                 if camera_name in ["top_camera", "front_camera"] and self.observation_mode not in ["image", "both"]:
                     continue
                 if camera_name in ["viz_camera"] and not monitoring_camera:
@@ -266,9 +290,10 @@ class LiftCubeEnv(DrakeGymEnv):
 
                 camera = builder.AddSystem(
                     RgbdSensor(parent_id=scene_graph.world_frame_id(),
-                               X_PB=X_PB[camera_name],
+                               X_PB=self.X_PB[camera_name],
                                color_camera=color_camera,
                                depth_camera=depth_camera))
+                camera.set_name(camera_name)
                 builder.Connect(scene_graph.get_query_output_port(),
                                 camera.query_object_input_port())
 
@@ -282,19 +307,21 @@ class LiftCubeEnv(DrakeGymEnv):
         # Observations
 
         class ObservationPublisher(LeafSystem):
-            def __init__(self, noise, camera_intrinsics, observation_mode):
+            def __init__(self, noise: bool, camera_names: list[str], observation_mode: str):
                 LeafSystem.__init__(self)
                 self.observation_mode = observation_mode
                 self.camera_input_port_index = {}
-                for camera_name, intrinsics in camera_intrinsics:
-                    self.camera_input_port_index[camera_name] = self.DeclareInputPort(
-                        camera_name, ImageRgba8U(intrinsics.width(), intrinsics.height())).index()
-                self.state_input_port_index = self.DeclareVectorInputPort(
-                    "plant_states", nq + nv).index()
 
-                self.DeclareVectorOutputPort(
-                    "observations", self.ns, self.CalcObs)
+                for camera_name in camera_names:
+                    self.camera_input_port_index[camera_name] = self.DeclareInputPort(
+                        camera_name, PortDataType.kAbstractValued, -1).get_index()
+
+                self.state_input_port_index = self.DeclareVectorInputPort(
+                    "plant_states", plant.num_multibody_states()).get_index()
+
+                self.DeclareAbstractOutputPort("observations", self.CalcObs)
                 self.noise = noise
+                # FIXME: not thread safe.
                 self.plant_context = plant.CreateDefaultContext()
 
             def CalcObs(self, context, output):
@@ -305,7 +332,7 @@ class LiftCubeEnv(DrakeGymEnv):
                     # TODO: This is a tunable parameter, put it somewhere accessible!
                     plant_state += np.random.uniform(low=-0.01,
                                                      high=0.01,
-                                                     size=nq + nv)
+                                                     size=plant.num_multibody_states())
 
                 self.plant_context.SetContinuousState(plant_state)
 
@@ -314,10 +341,10 @@ class LiftCubeEnv(DrakeGymEnv):
                     "arm_qvel": plant.GetVelocities(context=self.plant_context, model_instance=robot_model_instance),
                 }
                 if self.observation_mode in ["image", "both"]:
+                    image_name_mapping = {
+                        "front_camera": "image_front", "top_camera": "image_top"}
                     for camera_name, input_port_index in self.camera_input_port_index:
-                        name_mapping = {
-                            "front_camera": "image_front", "top_camera": "image_top"}
-                        output[name_mapping[camera_name]] = self.get_input_port(
+                        output[image_name_mapping[camera_name]] = self.get_input_port(
                             input_port_index).Eval(context)
                 if self.observation_mode in ["state", "both"]:
                     cube = plant.GetBodyByName("cube")
@@ -326,7 +353,8 @@ class LiftCubeEnv(DrakeGymEnv):
                     output["cube_pos"] = cube_pos
 
         obs_pub = builder.AddSystem(ObservationPublisher(
-            noise=obs_noise, camera_intrinsics=self.camera_intrinsics, observation_mode=self.observation_mode))
+            noise=obs_noise, camera_names=self.camera_systems.keys(), observation_mode=self.observation_mode))
+        obs_pub.set_name(obs_pub)
 
         for camera_name, system in self.camera_systems:
             builder.Connect(system.color_image_output_port(),
@@ -370,7 +398,8 @@ class LiftCubeEnv(DrakeGymEnv):
                         tau=[0, 0, 0],
                         f=[np.random.uniform(low=-max_f, high=max_f),
                            np.random.uniform(low=-max_f, high=max_f),
-                           np.random.uniform(low=-max_f, high=max_f)])
+                           np.random.uniform(low=-max_f, high=max_f),
+                           ])
                 else:
                     spatial_force = SpatialForce(
                         tau=[0, 0, 0],
@@ -440,3 +469,36 @@ class LiftCubeEnv(DrakeGymEnv):
         # Set the new cube position in the context.
         cube = plant.GetBodyByName("cube")
         plant.SetFreeBodyPose(plant_context, cube, RigidTransform(cube_pos))
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--render_mode", type=str, default="human")
+    parser.add_argument("--observation_mode", type=str, default="state")
+    parser.add_argument("--action_mode", type=str, default="joint")
+    args = parser.parse_args()
+
+    # Create the environment
+    env = LiftCubeEnv(observation_mode=args.observation_mode,
+                      action_mode=args.action_mode, render_mode=args.render_mode)
+
+    # Reset the environment
+    observation, info = env.reset()
+
+    for _ in range(1000):
+        # Sample random action
+        action = env.action_space.sample()
+
+        # Step the environment
+        observation, reward, terminted, truncated, info = env.step(action)
+
+        # Reset the environment if it's done
+        if terminted or truncated:
+            observation, info = env.reset()
+
+    # Close the environment
+    env.close()
+
+
+if __name__ == "__main__":
+    main()

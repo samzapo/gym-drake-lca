@@ -1,6 +1,9 @@
+#usage: e.g.: python3 gym_drake_lca/lca_passive_simulation.py --time_step 0.001 --simulation_time 9999
 import argparse
 
-from pydrake.multibody.plant import AddMultibodyPlantSceneGraph
+from pydrake.multibody.plant import (
+    AddMultibodyPlantSceneGraph, 
+    MultibodyPlant)
 from pydrake.multibody.parsing import Parser
 from pydrake.systems.framework import DiagramBuilder
 from pydrake.systems.analysis import Simulator
@@ -8,6 +11,22 @@ from pydrake.visualization import AddDefaultVisualization
 
 from pydrake.math import RigidTransform
 
+
+def AddModelsToDiagram(mbp : MultibodyPlant):
+    parser = Parser(plant=mbp)
+    (lca_model_instance,) = parser.AddModels("gym_drake_lca/low-cost-arm.urdf")
+    (ground_plane_model_instance,) = parser.AddModels("gym_drake_lca/assets/collision_ground_plane.sdf")
+
+    # Weld model instances to world frame.
+    X_WI = RigidTransform.Identity()
+    mbp.WeldFrames(mbp.world_frame(),
+                   mbp.GetFrameByName("base_link", lca_model_instance),
+                   X_WI)
+    mbp.WeldFrames(mbp.world_frame(),
+                   mbp.GetFrameByName("ground_plane_box", ground_plane_model_instance),
+                   X_WI)
+
+    mbp.Finalize()
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -26,29 +45,26 @@ def main():
     args = parser.parse_args()
 
     builder = DiagramBuilder()
+
+    # Add Multibody Plant to Diagram then add Models. 
     mbp, scene_graph = AddMultibodyPlantSceneGraph(
         builder=builder, time_step=args.time_step)
+    AddModelsToDiagram(mbp)
 
-    parser = Parser(plant=mbp)
-    (lca_model_instance,) = parser.AddModels(
-        "gym_drake_panda/low-cost-arm.urdf")
-
-    X_WI = RigidTransform.Identity()
-    mbp.WeldFrames(mbp.world_frame(),
-                   mbp.GetFrameByName("base_link", lca_model_instance),
-                   X_WI)
-
-    mbp.Finalize()
-
+    # Add Visualizer to Diagram
     AddDefaultVisualization(builder=builder)
+
+    # Build Diagram
     diagram = builder.Build()
 
     diagram_context = diagram.CreateDefaultContext()
     mbp_context = mbp.GetMyMutableContextFromRoot(diagram_context)
 
+    # Set input ports
     mbp.get_actuation_input_port().FixValue(
         mbp_context, [0] * mbp.num_positions())
 
+    # Simulate Diagram from initial State, set in Context.
     simulator = Simulator(diagram, diagram_context)
     simulator.set_publish_every_time_step(False)
     simulator.set_target_realtime_rate(args.target_realtime_rate)

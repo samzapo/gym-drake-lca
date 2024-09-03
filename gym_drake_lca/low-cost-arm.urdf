@@ -23,7 +23,7 @@
       </geometry>
     </collision>
   </link>
-  <link name="first-bracket-motor_1">
+  <link name="shoulder">
     <inertial>
       <origin rpy="0 0 0" xyz="0.0011215335520915035 -0.011960095984038348 0.012424221873872536"/>
       <mass value="0.050669759178187244"/>
@@ -43,7 +43,7 @@
       </geometry>
     </collision>
   </link>
-  <link name="shoulder-to-elbow-motor_v1_1">
+  <link name="elbow">
     <inertial>
       <origin rpy="0 0 0" xyz="-0.0191542760740305 -0.0012683813577475112 0.07144141167892787"/>
       <mass value="0.05261369068977079"/>
@@ -63,7 +63,7 @@
       </geometry>
     </collision>
   </link>
-  <link name="elbow-to-wrist-motor-reference_v1_1">
+  <link name="wrist">
     <inertial>
       <origin rpy="0 0 0" xyz="0.01951468809363352 0.026076660011439212 2.3261768583027198e-05"/>
       <mass value="0.02059907441055582"/>
@@ -83,7 +83,7 @@
       </geometry>
     </collision>
   </link>
-  <link name="gripper-static-motor_v2_1">
+  <link name="gripper_static_part">
     <inertial>
       <origin rpy="0 0 0" xyz="0.005421565533833407 0.019034667992307075 0.00011281388318701291"/>
       <mass value="0.030801959916802346"/>
@@ -103,7 +103,7 @@
       </geometry>
     </collision>
   </link>
-  <link name="gripper-moving-part-dumb_v2_1">
+  <link name="gripper_moving_part">
     <inertial>
       <origin rpy="0 0 0" xyz="0.001094897934895013 0.025115003984107043 -0.01445125352746443"/>
       <mass value="0.013583445641331692"/>
@@ -131,31 +131,31 @@
   <joint name="joint_2" type="continuous">
     <origin rpy="0 0 0" xyz="0.00025 0.06875 0.0409"/>
     <parent link="robot_base"/>
-    <child link="first-bracket-motor_1"/>
+    <child link="shoulder"/>
     <axis xyz="0.0 0.0 1.0"/>
   </joint>
   <joint name="joint_3" type="continuous">
     <origin rpy="0 0 0" xyz="0.0192 0.0002 0.01425"/>
-    <parent link="first-bracket-motor_1"/>
-    <child link="shoulder-to-elbow-motor_v1_1"/>
+    <parent link="shoulder"/>
+    <child link="elbow"/>
     <axis xyz="1.0 0.0 0.0"/>
   </joint>
   <joint name="joint_5" type="continuous">
     <origin rpy="0 0 0" xyz="-0.03375 0.0148 0.1083"/>
-    <parent link="shoulder-to-elbow-motor_v1_1"/>
-    <child link="elbow-to-wrist-motor-reference_v1_1"/>
+    <parent link="elbow"/>
+    <child link="wrist"/>
     <axis xyz="1.0 -0.0 0.0"/>
   </joint>
   <joint name="joint_6" type="continuous">
     <origin rpy="0 0 0" xyz="0.013407 0.044938 -1.3e-05"/>
-    <parent link="elbow-to-wrist-motor-reference_v1_1"/>
-    <child link="gripper-static-motor_v2_1"/>
+    <parent link="wrist"/>
+    <child link="gripper_static_part"/>
     <axis xyz="-0.0 -1.0 0.0"/>
   </joint>
   <joint name="joint_7" type="continuous">
     <origin rpy="0 0 0" xyz="-0.00755 0.01299 0.01425"/>
-    <parent link="gripper-static-motor_v2_1"/>
-    <child link="gripper-moving-part-dumb_v2_1"/>
+    <parent link="gripper_static_part"/>
+    <child link="gripper_moving_part"/>
     <axis xyz="-0.0 -0.0 -1.0"/>
   </joint>
   <transmission type="SimpleTransmission" name="joint_2_transmission">

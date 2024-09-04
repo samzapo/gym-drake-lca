@@ -12,14 +12,14 @@
     <visual>
       <origin rpy="1.5708 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="assets/base_link_visible.obj" scale="0.001 0.001 0.001"/>
+        <mesh filename="base_link_visible.obj" scale="0.001 0.001 0.001"/>
       </geometry>
       <color rgba="0.700 0.700 0.700 1.000"/>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="assets/base_link.obj" scale="0.001 0.001 0.001"/>
+        <mesh filename="base_link.obj" scale="0.001 0.001 0.001"/>
       </geometry>
     </collision>
   </link>
@@ -32,14 +32,14 @@
     <visual>
       <origin rpy="0 0 0" xyz="-0.00025 -0.06875 -0.0409"/>
       <geometry>
-        <mesh filename="assets/first-bracket-motor_1.obj" scale="0.001 0.001 0.001"/>
+        <mesh filename="first-bracket-motor_1.obj" scale="0.001 0.001 0.001"/>
       </geometry>
       <color rgba="0.700 0.700 0.700 1.000"/>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="-0.00025 -0.06875 -0.0409"/>
       <geometry>
-        <mesh filename="assets/first-bracket-motor_1.obj" scale="0.001 0.001 0.001"/>
+        <mesh filename="first-bracket-motor_1.obj" scale="0.001 0.001 0.001"/>
       </geometry>
     </collision>
   </link>
@@ -52,14 +52,14 @@
     <visual>
       <origin rpy="0 0 0" xyz="-0.01945 -0.06895 -0.05515"/>
       <geometry>
-        <mesh filename="assets/shoulder-to-elbow-motor_v1_1.obj" scale="0.001 0.001 0.001"/>
+        <mesh filename="shoulder-to-elbow-motor_v1_1.obj" scale="0.001 0.001 0.001"/>
       </geometry>
       <color rgba="0.700 0.700 0.700 1.000"/>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="-0.01945 -0.06895 -0.05515"/>
       <geometry>
-        <mesh filename="assets/shoulder-to-elbow-motor_v1_1.obj" scale="0.001 0.001 0.001"/>
+        <mesh filename="shoulder-to-elbow-motor_v1_1.obj" scale="0.001 0.001 0.001"/>
       </geometry>
     </collision>
   </link>
@@ -72,14 +72,14 @@
     <visual>
       <origin rpy="0 0 0" xyz="0.0143 -0.08375 -0.16345"/>
       <geometry>
-        <mesh filename="assets/elbow-to-wrist-motor-reference_v1_1.obj" scale="0.001 0.001 0.001"/>
+        <mesh filename="elbow-to-wrist-motor-reference_v1_1.obj" scale="0.001 0.001 0.001"/>
       </geometry>
       <color rgba="0.700 0.700 0.700 1.000"/>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0.0143 -0.08375 -0.16345"/>
       <geometry>
-        <mesh filename="assets/elbow-to-wrist-motor-reference_v1_1.obj" scale="0.001 0.001 0.001"/>
+        <mesh filename="elbow-to-wrist-motor-reference_v1_1.obj" scale="0.001 0.001 0.001"/>
       </geometry>
     </collision>
   </link>
@@ -92,14 +92,14 @@
     <visual>
       <origin rpy="0 0 0" xyz="0.000893 -0.128688 -0.163437"/>
       <geometry>
-        <mesh filename="assets/gripper-static-motor_v2_1.obj" scale="0.001 0.001 0.001"/>
+        <mesh filename="gripper-static-motor_v2_1.obj" scale="0.001 0.001 0.001"/>
       </geometry>
       <color rgba="0.700 0.700 0.700 1.000"/>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0.000893 -0.128688 -0.163437"/>
       <geometry>
-        <mesh filename="assets/gripper-static-motor_v2_1.obj" scale="0.001 0.001 0.001"/>
+        <mesh filename="gripper-static-motor_v2_1.obj" scale="0.001 0.001 0.001"/>
       </geometry>
       <drake:proximity_properties>
         <drake:rigid_hydroelastic/>
@@ -115,14 +115,14 @@
     <visual>
       <origin rpy="0 0 0" xyz="0.008443 -0.141678 -0.177687"/>
       <geometry>
-        <mesh filename="assets/gripper-moving-part-dumb_v2_1.obj" scale="0.001 0.001 0.001"/>
+        <mesh filename="gripper-moving-part-dumb_v2_1.obj" scale="0.001 0.001 0.001"/>
       </geometry>
       <color rgba="0.700 0.700 0.700 1.000"/>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0.008443 -0.141678 -0.177687"/>
       <geometry>
-        <mesh filename="assets/gripper-moving-part-dumb_v2_1.obj" scale="0.001 0.001 0.001"/>
+        <mesh filename="gripper-moving-part-dumb_v2_1.obj" scale="0.001 0.001 0.001"/>
       </geometry>
       <drake:proximity_properties>
         <drake:rigid_hydroelastic/>

@@ -24,9 +24,26 @@ snap install blender --classic
 pip install bpy
 ```
 
-# Running
+## Setup Project
 
 ```
 source env/bin/activate
+pip install -e .
+```
+
+# Tests
+
+## Just Drake
+```
 python3 gym_drake_lca/lca_passive_simulation.py
+```
+
+## DrakeGymEnv
+```
+python3 gym_drake_lca/envs/test_lift_cube_env.py
+```
+
+## DrakeGymEnv + Gym
+```
+python3 gym_drake_lca/envs/test_env.py
 ```

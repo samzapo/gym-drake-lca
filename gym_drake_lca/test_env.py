@@ -1,7 +1,4 @@
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-import envs # Import environments
+import gym_drake_lca.envs
 
 import argparse
 import gymnasium as gym

@@ -1,4 +1,3 @@
-import argparse
 import gymnasium as gym
 import matplotlib.pyplot as plt
 import numpy as np
@@ -21,6 +20,8 @@ from pydrake.geometry import (
     MakeRenderEngineVtk,
     RenderCameraCore,
     RenderEngineVtkParams,
+    EnvironmentMap,
+    EquirectangularMap,
 )
 from pydrake.gym import DrakeGymEnv
 from pydrake.math import RigidTransform, RollPitchYaw, RotationMatrix
@@ -55,16 +56,23 @@ from pydrake.systems.sensors import (
     RgbdSensor,
     ImageRgba8U,
 )
-from pydrake.visualization import AddDefaultVisualization
+
+from pydrake.visualization import (
+    ApplyVisualizationConfig,
+    VisualizationConfig,
+    AddDefaultVisualization,
+)
+
+from gym_drake_lca import ASSETS_PATH
 
 
-class GymObservationsDict:
+class GymDictWrapper:
     def __init__(self):
-        self.observations = gym.spaces.Dict({})
+        self.values = dict({})
 
 
 class LiftCubeEnv(DrakeGymEnv):
-    metadata = {"render_modes": ["human", "rgb_array"],
+    metadata = {"render_modes": ["human", "rgb_array", "ansi"],
                 "observation_modes": ["image", "state", "both"],
                 "action_modes": ["joint", "ee"], }
 
@@ -75,25 +83,24 @@ class LiftCubeEnv(DrakeGymEnv):
                  enable_meshcat_viz=True,
                  debug=False,
                  obs_noise=False,
-                 monitoring_camera=False,
                  add_disturbances=False):
         assert render_mode in self.metadata["render_modes"]
         assert observation_mode in self.metadata["observation_modes"]
         assert action_mode in self.metadata["action_modes"]
 
         self.camera_intrinsics = {
-            "front_camera": CameraInfo(640, 640, np.pi / 4),
-            "top_camera": CameraInfo(640, 640, np.pi / 4),
-            "viz_camera": CameraInfo(640, 640, np.pi / 4),
+            "front_camera": CameraInfo(640, 640, np.pi/4),
+            "top_camera": CameraInfo(640, 640, np.pi/4),
+            "viz_camera": CameraInfo(640, 640, np.pi/4),
         }
 
         def normalize(x):
             return x / np.linalg.norm(x)
 
         self.X_PB = {
-            "front_camera": RigidTransform(RotationMatrix.MakeYRotation(-np.pi / 2), np.array([0.049, 0.888, 0.317])),
-            "top_camera": RigidTransform(RotationMatrix.Identity(), np.array([0, 0, 1])),
-            "viz_camera": RigidTransform(RotationMatrix(Quaternion(wxyz=normalize([-0.15, -0.1, 0.6, 1]))), np.array([-0.1, 0.6, 0.3])),
+            "front_camera": RigidTransform(RotationMatrix.MakeXRotation(np.pi / 2 + np.pi / 32).multiply(RotationMatrix.MakeZRotation(-np.pi)), np.array([0.0, 0.6, 0.2])),
+            "top_camera": RigidTransform(RotationMatrix.MakeXRotation(np.pi), np.array([0, 0, 1.0])),
+            "viz_camera": RigidTransform(RotationMatrix.MakeZRotation(np.pi/16).multiply(RotationMatrix.MakeXRotation(5 * np.pi / 8).multiply(RotationMatrix.MakeZRotation(-np.pi))), np.array([-0.1, 0.6, 0.3])),
         }
 
         self.observation_mode = observation_mode
@@ -113,7 +120,8 @@ class LiftCubeEnv(DrakeGymEnv):
         simulator = self.ConstructSimulator(enable_meshcat_viz=enable_meshcat_viz,
                                             debug=debug,
                                             obs_noise=obs_noise,
-                                            monitoring_camera=monitoring_camera,
+                                            monitoring_camera=(
+                                                render_mode in ["rgb_array"]),
                                             add_disturbances=add_disturbances)
 
         # Set the action space
@@ -145,18 +153,18 @@ class LiftCubeEnv(DrakeGymEnv):
                          action_port_id="actions",
                          observation_port_id="observations",
                          render_rgb_port_id={
-                             "rgb_array": "viz_camera", "human": None}[render_mode],
+                             "rgb_array": "viz_camera", "human": None, "ansi": None}[render_mode],
                          render_mode=render_mode,
                          reset_handler=self.HandleReset)
 
     def AddModels(self, plant):
         parser = Parser(plant=plant)
         (robot_model_instance,) = parser.AddModels(
-            "gym_drake_lca/low-cost-arm.urdf")
+            f"{ASSETS_PATH}/low-cost-arm.urdf")
         (ground_plane_model_instance,) = parser.AddModels(
-            "gym_drake_lca/assets/collision_ground_plane.sdf")
+            f"{ASSETS_PATH}/collision_ground_plane.sdf")
 
-        parser.AddModels("gym_drake_lca/assets/cube.sdf")
+        parser.AddModels(f"{ASSETS_PATH}/cube.sdf")
 
         # Weld model instances to world frame.
         X_WI = RigidTransform.Identity()
@@ -181,22 +189,23 @@ class LiftCubeEnv(DrakeGymEnv):
             discrete_contact_approximation=self.contact_approximation,
         )
 
+        # Construct plant.
         plant, scene_graph = AddMultibodyPlant(multibody_plant_config, builder)
         plant.set_name("plant")
 
         gravity_vector = np.array([0.0, 0.0, -9.81])
         plant.mutable_gravity_field().set_gravity_vector(gravity_vector)
 
-        # Add assets to the plant.
         robot_model_instance = self.AddModels(plant)
         plant.Finalize()
 
-        # Add Visualizer to Diagram
-        if enable_meshcat_viz:
-            AddDefaultVisualization(builder=builder)
-
         nq = plant.num_positions(model_instance=robot_model_instance)
         nv = plant.num_velocities(model_instance=robot_model_instance)
+
+        # Add visualizer to the plant and update only when render() is called (inf period).
+        viz_config: VisualizationConfig = VisualizationConfig()
+        viz_config.publish_period = np.inf
+        ApplyVisualizationConfig(config=viz_config, builder=builder)
 
         #########################################################################
         # Actions
@@ -279,27 +288,32 @@ class LiftCubeEnv(DrakeGymEnv):
 
         #########################################################################
         # Camera
-
         self.camera_systems = {}
         if monitoring_camera or (self.observation_mode in ["image", "both"]):
+            environment_map: EnvironmentMap = EnvironmentMap(
+                skybox=True, texture=EquirectangularMap(path=f"{ASSETS_PATH}/env_256_brick_room.jpg"))
             scene_graph.AddRenderer(
-                "renderer", MakeRenderEngineVtk(RenderEngineVtkParams()))
+                "renderer", MakeRenderEngineVtk(RenderEngineVtkParams(environment_map=environment_map, cast_shadows=True)))
 
             for camera_name, intrinsics in self.camera_intrinsics.items():
-                if camera_name in ["top_camera", "front_camera"] and self.observation_mode not in ["image", "both"]:
+                is_observation_camera = (
+                    camera_name in ["top_camera", "front_camera"])
+                if is_observation_camera and (not self.observation_mode in ["image", "both"]):
                     continue
-                if camera_name in ["viz_camera"] and not monitoring_camera:
+
+                is_monitoring_camera = (camera_name in ["viz_camera"])
+                if is_monitoring_camera and not monitoring_camera:
                     continue
 
                 color_camera = ColorRenderCamera(RenderCameraCore("renderer",
                                                                   intrinsics,
                                                                   ClippingRange(
-                                                                      0.01, 10.0),
+                                                                      0.1, 10.0),
                                                                   RigidTransform()
                                                                   ), False)
 
                 depth_camera = DepthRenderCamera(color_camera.core(),
-                                                 DepthRange(0.01, 10.0))
+                                                 DepthRange(0.1, 10.0))
 
                 camera = builder.AddSystem(
                     RgbdSensor(parent_id=scene_graph.world_frame_id(),
@@ -307,13 +321,14 @@ class LiftCubeEnv(DrakeGymEnv):
                                color_camera=color_camera,
                                depth_camera=depth_camera))
                 camera.set_name(camera_name)
+
                 builder.Connect(scene_graph.get_query_output_port(),
                                 camera.query_object_input_port())
 
-                if camera_name in ["viz_camera"] and monitoring_camera:
+                if is_monitoring_camera:
                     builder.ExportOutput(
                         camera.color_image_output_port(), "viz_camera")
-                if camera_name in ["top_camera", "front_camera"]:
+                elif is_observation_camera:
                     self.camera_systems[camera_name] = camera
 
         print("Camera systems active (Note: this will impact performance): {camera_system_names}".format(
@@ -329,14 +344,16 @@ class LiftCubeEnv(DrakeGymEnv):
                 self.camera_input_port_index = {}
 
                 for camera_name in camera_names:
-                    self.camera_input_port_index[camera_name] = self.DeclareInputPort(
-                        camera_name, PortDataType.kAbstractValued, -1).get_index()
+                    self.camera_input_port_index[camera_name] = self.DeclareAbstractInputPort(
+                        camera_name, Value(ImageRgba8U())).get_index()
+                    print(
+                        f"{camera_name} at input index {self.camera_input_port_index[camera_name]}.")
 
                 self.state_input_port_index = self.DeclareVectorInputPort(
                     "plant_states", plant.num_multibody_states()).get_index()
 
                 def alloc_fn():
-                    return Value(GymObservationsDict())
+                    return Value(GymDictWrapper())
 
                 self.DeclareAbstractOutputPort(
                     "observations", alloc_fn, self.CalcObs)
@@ -357,32 +374,40 @@ class LiftCubeEnv(DrakeGymEnv):
                 plant.SetPositionsAndVelocities(
                     self.plant_context, plant_state)
 
-                output = {
-                    "arm_qpos": plant.GetPositions(context=self.plant_context, model_instance=robot_model_instance),
-                    "arm_qvel": plant.GetVelocities(context=self.plant_context, model_instance=robot_model_instance),
-                }
+                observations = GymDictWrapper()
+                observations.values["arm_qpos"] = plant.GetPositions(
+                    context=self.plant_context, model_instance=robot_model_instance)
+                observations.values["arm_qvel"] = plant.GetVelocities(
+                    context=self.plant_context, model_instance=robot_model_instance)
+
                 if self.observation_mode in ["image", "both"]:
                     image_name_mapping = {
                         "front_camera": "image_front", "top_camera": "image_top"}
-                    for camera_name, input_port_index in self.camera_input_port_index:
-                        output[image_name_mapping[camera_name]] = self.get_input_port(
-                            input_port_index).Eval(context)
+                    for camera_name, input_port_index in self.camera_input_port_index.items():
+                        assert camera_name in image_name_mapping
+                        observations.values[image_name_mapping[camera_name]] = self.get_input_port(
+                            input_port_index).Eval(context).data
                 if self.observation_mode in ["state", "both"]:
                     cube = plant.GetBodyByName("cube")
                     cube_pos = cube.EvalPoseInWorld(
                         self.plant_context).translation()
-                    output["cube_pos"] = cube_pos
+                    observations.values["cube_pos"] = cube_pos
+
+                # Assign the output value.
+                output.set_value(observations)
 
         obs_pub = builder.AddSystem(ObservationPublisher(
             noise=obs_noise, camera_names=self.camera_systems.keys(), observation_mode=self.observation_mode))
         obs_pub.set_name("obs_pub")
 
-        for camera_name, system in self.camera_systems:
-            builder.Connect(system.color_image_output_port(),
+        for camera_name, camera_system in self.camera_systems.items():
+            print(
+                f"Wiring {camera_name} at input index {obs_pub.camera_input_port_index[camera_name]}.")
+            builder.Connect(camera_system.color_image_output_port(),
                             obs_pub.get_input_port(obs_pub.camera_input_port_index[camera_name]))
 
         builder.Connect(plant.get_state_output_port(),
-                        obs_pub.get_input_port(0))
+                        obs_pub.get_input_port(obs_pub.state_input_port_index))
         builder.ExportOutput(obs_pub.get_output_port(), "observations")
 
         #########################################################################
@@ -440,6 +465,7 @@ class LiftCubeEnv(DrakeGymEnv):
             disturbance_generator.set_name("disturbance_generator")
 
         self.diagram = builder.Build()
+        self.diagram.set_name("Diagram")
         simulator = Simulator(self.diagram)
         simulator.Initialize()
 
@@ -510,37 +536,3 @@ class LiftCubeEnv(DrakeGymEnv):
         # Set the new cube position in the context.
         cube = plant.GetBodyByName("cube")
         plant.SetFreeBodyPose(plant_context, cube, RigidTransform(cube_pos))
-
-
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--render_mode", type=str, default="human")
-    parser.add_argument("--observation_mode", type=str, default="state")
-    parser.add_argument("--action_mode", type=str, default="joint")
-    args = parser.parse_args()
-
-    # Create the environment
-    env = LiftCubeEnv(observation_mode=args.observation_mode,
-                      action_mode=args.action_mode, render_mode=args.render_mode)
-
-    # Reset the environment
-    observation, info = env.reset()
-
-    for iter in range(1000):
-        # Sample random action
-        action = env.action_space.sample()
-
-        print(f"iter={iter}")
-        # Step the environment
-        observation, reward, terminted, truncated, info = env.step(action)
-
-        # Reset the environment if it's done
-        if terminted or truncated:
-            observation, info = env.reset()
-
-    # Close the environment
-    env.close()
-
-
-if __name__ == "__main__":
-    main()

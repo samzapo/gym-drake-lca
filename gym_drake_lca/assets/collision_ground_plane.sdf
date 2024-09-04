@@ -19,7 +19,7 @@
         <pose>0 0 -0.5 0 0 0</pose>
         <geometry>
           <box>
-            <size>2.0 2.0 1.0</size>
+            <size>1.0 1.0 1.0</size>
           </box>
         </geometry>
         <material>
@@ -30,7 +30,7 @@
         <pose>0 0 -0.5 0 0 0</pose>
         <geometry>
           <box>
-            <size>2.0 2.0 1.0</size>
+            <size>1.0 1.0 1.0</size>
           </box>
         </geometry>
         <drake:proximity_properties>

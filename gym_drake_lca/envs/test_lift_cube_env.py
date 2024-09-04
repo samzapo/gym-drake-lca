@@ -18,7 +18,7 @@ def main():
     args = parser.parse_args()
 
     logging.basicConfig()
-    logging.getLogger().setLevel(logging.DEBUG)
+    logging.getLogger().setLevel(logging.INFO)
     pydrake.common.configure_logging()
 
     # Create the environment

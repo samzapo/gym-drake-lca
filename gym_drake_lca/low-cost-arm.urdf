@@ -101,6 +101,9 @@
       <geometry>
         <mesh filename="assets/gripper-static-motor_v2_1.obj" scale="0.001 0.001 0.001"/>
       </geometry>
+      <drake:proximity_properties>
+        <drake:rigid_hydroelastic/>
+      </drake:proximity_properties>
     </collision>
   </link>
   <link name="gripper_moving_part">
@@ -121,6 +124,9 @@
       <geometry>
         <mesh filename="assets/gripper-moving-part-dumb_v2_1.obj" scale="0.001 0.001 0.001"/>
       </geometry>
+      <drake:proximity_properties>
+        <drake:rigid_hydroelastic/>
+      </drake:proximity_properties>
     </collision>
   </link>
   <joint name="base_weld" type="fixed">

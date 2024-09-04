@@ -6,11 +6,13 @@ import numpy as np
 from pydrake.common.eigen_geometry import (
     Quaternion
 )
-
-from pydrake.systems.sensors import (
-    CameraInfo,
-    ImageRgba8U,
+from pydrake.common.value import (
+    AbstractValue,
+    Value,
 )
+
+from typing import NamedTuple
+
 from pydrake.geometry import (
     ClippingRange,
     ColorRenderCamera,
@@ -31,23 +33,34 @@ from pydrake.multibody.plant import (
     MultibodyPlantConfig,
 )
 from pydrake.systems.analysis import Simulator
+from pydrake.systems.controllers import (
+    PidController,
+)
 from pydrake.systems.drawing import plot_graphviz, plot_system_graphviz
 from pydrake.systems.framework import (
     DiagramBuilder,
     EventStatus,
     LeafSystem,
     PortDataType,
+    Context,
+    BasicVector,
 )
 from pydrake.systems.primitives import (
     ConstantVectorSource,
     Multiplexer,
     Demultiplexer,
 )
-from pydrake.systems.sensors import CameraInfo, RgbdSensor
-from pydrake.systems.controllers import (
-    PidController,
+from pydrake.systems.sensors import (
+    CameraInfo,
+    RgbdSensor,
+    ImageRgba8U,
 )
 from pydrake.visualization import AddDefaultVisualization
+
+
+class GymObservationsDict:
+    def __init__(self):
+        self.observations = gym.spaces.Dict({})
 
 
 class LiftCubeEnv(DrakeGymEnv):
@@ -86,9 +99,9 @@ class LiftCubeEnv(DrakeGymEnv):
         self.observation_mode = observation_mode
         self.action_mode = action_mode
         # Gym parameters.
-        self.sim_time_step = 0.001
-        time_step = 0.01
-        self.gym_time_limit = 5
+        self.sim_time_step = 0
+        gym_time_step = 0.05
+        self.gym_time_limit = 0.5
 
         drake_contact_models = ['point', 'hydroelastic_with_fallback']
         self.contact_model = drake_contact_models[1]
@@ -105,7 +118,7 @@ class LiftCubeEnv(DrakeGymEnv):
 
         # Set the action space
         self.action_mode = action_mode
-        action_shape = {"joint": 6, "ee": 4}[action_mode]
+        action_shape = {"joint": 5, "ee": 4}[action_mode]
         action_space = gym.spaces.Box(
             low=-1.0, high=1.0, shape=(action_shape,), dtype=np.float32)
 
@@ -125,7 +138,7 @@ class LiftCubeEnv(DrakeGymEnv):
         observation_space = gym.spaces.Dict(observation_subspaces)
 
         super().__init__(simulator=simulator,
-                         time_step=time_step,
+                         time_step=gym_time_step,
                          action_space=action_space,
                          observation_space=observation_space,
                          reward="reward",
@@ -236,7 +249,8 @@ class LiftCubeEnv(DrakeGymEnv):
 
             def CalcReward(self, context, output):
                 plant_state = self.get_input_port(0).Eval(context)
-                self.plant_context.SetContinuousState(plant_state)
+                plant.SetPositionsAndVelocities(
+                    self.plant_context, plant_state)
 
                 gripper_moving_side = plant.GetBodyByName(
                     "gripper_moving_part")
@@ -266,11 +280,10 @@ class LiftCubeEnv(DrakeGymEnv):
         #########################################################################
         # Camera
 
+        self.camera_systems = {}
         if monitoring_camera or (self.observation_mode in ["image", "both"]):
             scene_graph.AddRenderer(
                 "renderer", MakeRenderEngineVtk(RenderEngineVtkParams()))
-
-            self.cameras = {}
 
             for camera_name, intrinsics in self.camera_intrinsics.items():
                 if camera_name in ["top_camera", "front_camera"] and self.observation_mode not in ["image", "both"]:
@@ -303,6 +316,9 @@ class LiftCubeEnv(DrakeGymEnv):
                 if camera_name in ["top_camera", "front_camera"]:
                     self.camera_systems[camera_name] = camera
 
+        print("Camera systems active (Note: this will impact performance): {camera_system_names}".format(
+            camera_system_names=list(self.camera_systems.keys())))
+
         #########################################################################
         # Observations
 
@@ -319,7 +335,11 @@ class LiftCubeEnv(DrakeGymEnv):
                 self.state_input_port_index = self.DeclareVectorInputPort(
                     "plant_states", plant.num_multibody_states()).get_index()
 
-                self.DeclareAbstractOutputPort("observations", self.CalcObs)
+                def alloc_fn():
+                    return Value(GymObservationsDict())
+
+                self.DeclareAbstractOutputPort(
+                    "observations", alloc_fn, self.CalcObs)
                 self.noise = noise
                 # FIXME: not thread safe.
                 self.plant_context = plant.CreateDefaultContext()
@@ -334,7 +354,8 @@ class LiftCubeEnv(DrakeGymEnv):
                                                      high=0.01,
                                                      size=plant.num_multibody_states())
 
-                self.plant_context.SetContinuousState(plant_state)
+                plant.SetPositionsAndVelocities(
+                    self.plant_context, plant_state)
 
                 output = {
                     "arm_qpos": plant.GetPositions(context=self.plant_context, model_instance=robot_model_instance),
@@ -354,7 +375,7 @@ class LiftCubeEnv(DrakeGymEnv):
 
         obs_pub = builder.AddSystem(ObservationPublisher(
             noise=obs_noise, camera_names=self.camera_systems.keys(), observation_mode=self.observation_mode))
-        obs_pub.set_name(obs_pub)
+        obs_pub.set_name("obs_pub")
 
         for camera_name, system in self.camera_systems:
             builder.Connect(system.color_image_output_port(),
@@ -416,9 +437,10 @@ class LiftCubeEnv(DrakeGymEnv):
                     period=1, duration=0.1))
             builder.Connect(disturbance_generator.get_output_port(),
                             plant.get_applied_spatial_force_input_port())
+            disturbance_generator.set_name("disturbance_generator")
 
-        diagram = builder.Build()
-        simulator = Simulator(diagram)
+        self.diagram = builder.Build()
+        simulator = Simulator(self.diagram)
         simulator.Initialize()
 
         def monitor(context, gym_time_limit=self.gym_time_limit):
@@ -427,9 +449,29 @@ class LiftCubeEnv(DrakeGymEnv):
                 if debug:
                     print("Episode reached time limit.")
                 return EventStatus.ReachedTermination(
-                    diagram,
+                    self.diagram,
                     "time limit")
 
+            # TODO: Add penetration depth with self or environment as a penalty to the reward calculation.
+            # Terminate if the robot is buried in the environment.
+            max_depth = 0.01  # 1 cm
+
+            # Get the plant context.
+            plant = self.diagram.GetSubsystemByName("plant")
+            plant_context = self.diagram.GetMutableSubsystemContext(
+                plant, context)
+
+            contact_results = plant.get_contact_results_output_port().Eval(plant_context)
+
+            # robot-ground contact is rigid.
+            for i in range(contact_results.num_point_pair_contacts()):
+                depth = contact_results.point_pair_contact_info(
+                    i).point_pair().depth
+
+                if depth > max_depth:
+                    if debug:
+                        print("Excessive Contact with Environment.")
+                    return EventStatus.Failed(self.diagram, "Excessive Contact with Environment.")
             return EventStatus.Succeeded()
 
         simulator.set_monitor(monitor)
@@ -439,13 +481,17 @@ class LiftCubeEnv(DrakeGymEnv):
             plt.figure()
             plot_graphviz(plant.GetTopologyGraphvizString())
             plt.figure()
-            plot_system_graphviz(diagram, max_depth=2)
+            plot_system_graphviz(self.diagram, max_depth=2)
             plt.plot(1)
             plt.show(block=False)
 
         return simulator
 
     def HandleReset(self, simulator, diagram_context, seed):
+        # Reset the Diagram context to default.
+        self.diagram = simulator.get_system()
+        diagram_context = self.diagram.CreateDefaultContext()
+
         # Set the seed.
         np.random.seed(seed)
 
@@ -454,17 +500,12 @@ class LiftCubeEnv(DrakeGymEnv):
         cube_high = np.array([0.15, 0.25, 0.015])
 
         # Get the plant context.
-        diagram = simulator.get_system()
-        plant = diagram.GetSubsystemByName("plant")
-        plant_context = diagram.GetMutableSubsystemContext(plant,
-                                                           diagram_context)
-
-        # Reset the context to default state.
-        plant_context.SetContinuousState(
-            [0] * (plant.num_positions() + plant.num_velocities()))
+        plant = self.diagram.GetSubsystemByName("plant")
+        plant_context = self.diagram.GetMutableSubsystemContext(plant,
+                                                                diagram_context)
 
         # Randomize a new cube position.
-        cube_pos = np.random.uniform(cube_low, cube_high, size=(3, 1))
+        cube_pos = np.random.uniform(low=cube_low, high=cube_high)
 
         # Set the new cube position in the context.
         cube = plant.GetBodyByName("cube")
@@ -485,10 +526,11 @@ def main():
     # Reset the environment
     observation, info = env.reset()
 
-    for _ in range(1000):
+    for iter in range(1000):
         # Sample random action
         action = env.action_space.sample()
 
+        print(f"iter={iter}")
         # Step the environment
         observation, reward, terminted, truncated, info = env.step(action)
 

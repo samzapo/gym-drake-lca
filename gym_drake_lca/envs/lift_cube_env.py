@@ -89,18 +89,18 @@ class LiftCubeEnv(DrakeGymEnv):
         assert action_mode in self.metadata["action_modes"]
 
         self.camera_intrinsics = {
-            "front_camera": CameraInfo(640, 640, np.pi/4),
-            "top_camera": CameraInfo(640, 640, np.pi/4),
-            "viz_camera": CameraInfo(640, 640, np.pi/4),
+            "front_camera": CameraInfo(320, 240, np.pi/4),
+            "top_camera": CameraInfo(320, 240, np.pi/4),
+            "viz_camera": CameraInfo(320, 240, np.pi/4),
         }
 
         def normalize(x):
             return x / np.linalg.norm(x)
 
         self.X_PB = {
-            "front_camera": RigidTransform(RotationMatrix.MakeXRotation(np.pi / 2 + np.pi / 32).multiply(RotationMatrix.MakeZRotation(-np.pi)), np.array([0.0, 0.6, 0.2])),
-            "top_camera": RigidTransform(RotationMatrix.MakeXRotation(np.pi), np.array([0, 0, 1.0])),
-            "viz_camera": RigidTransform(RotationMatrix.MakeZRotation(np.pi/16).multiply(RotationMatrix.MakeXRotation(5 * np.pi / 8).multiply(RotationMatrix.MakeZRotation(-np.pi))), np.array([-0.1, 0.6, 0.3])),
+            "front_camera": RigidTransform(RotationMatrix.MakeXRotation(np.pi / 2 + np.pi / 32).multiply(RotationMatrix.MakeZRotation(-np.pi)), np.array([0.0, 0.6, 0.15])),
+            "top_camera": RigidTransform(RotationMatrix.MakeXRotation(np.pi), np.array([0, 0.1, 0.6])),
+            "viz_camera": RigidTransform(RotationMatrix.MakeZRotation(np.pi/4).multiply(RotationMatrix.MakeXRotation(5 * np.pi / 8).multiply(RotationMatrix.MakeZRotation(-np.pi))), np.array([-0.4, 0.4, 0.3])),
         }
 
         self.observation_mode = observation_mode
@@ -130,25 +130,11 @@ class LiftCubeEnv(DrakeGymEnv):
         action_space = gym.spaces.Box(
             low=-1.0, high=1.0, shape=(action_shape,), dtype=np.float32)
 
-        # Set the observations space
-        observation_subspaces = {
-            "arm_qpos": gym.spaces.Box(low=-np.pi, high=np.pi, shape=(6,), dtype=np.float32),
-            "arm_qvel": gym.spaces.Box(low=-10, high=10, shape=(6,), dtype=np.float32),
-        }
-        if observation_mode in ["image", "both"]:
-            observation_subspaces["image_front"] = gym.spaces.Box(
-                0, 255, shape=(240, 320, 3), dtype=np.uint8)
-            observation_subspaces["image_top"] = gym.spaces.Box(
-                0, 255, shape=(240, 320, 3), dtype=np.uint8)
-        if observation_mode in ["state", "both"]:
-            observation_subspaces["cube_pos"] = gym.spaces.Box(
-                low=-10.0, high=10.0, shape=(3,))
-        observation_space = gym.spaces.Dict(observation_subspaces)
 
         super().__init__(simulator=simulator,
                          time_step=gym_time_step,
                          action_space=action_space,
-                         observation_space=observation_space,
+                         observation_space=self.ConstructObservationSpace(),
                          reward="reward",
                          action_port_id="actions",
                          observation_port_id="observations",
@@ -156,6 +142,22 @@ class LiftCubeEnv(DrakeGymEnv):
                              "rgb_array": "viz_camera", "human": None, "ansi": None}[render_mode],
                          render_mode=render_mode,
                          reset_handler=self.HandleReset)
+
+    def ConstructObservationSpace(self):
+        # Set the observations space
+        observation_subspaces = {
+            "arm_qpos": gym.spaces.Box(low=-np.pi, high=np.pi, shape=(6,), dtype=np.float32),
+            "arm_qvel": gym.spaces.Box(low=-10, high=10, shape=(6,), dtype=np.float32),
+        }
+        if self.observation_mode in ["image", "both"]:
+            observation_subspaces["image_front"] = gym.spaces.Box(
+                0, 255, shape=(240, 320, 3), dtype=np.uint8)
+            observation_subspaces["image_top"] = gym.spaces.Box(
+                0, 255, shape=(240, 320, 3), dtype=np.uint8)
+        if self.observation_mode in ["state", "both"]:
+            observation_subspaces["cube_pos"] = gym.spaces.Box(
+                low=-10.0, high=10.0, shape=(3,))
+        return gym.spaces.Dict(observation_subspaces)
 
     def AddModels(self, plant):
         parser = Parser(plant=plant)
@@ -338,10 +340,11 @@ class LiftCubeEnv(DrakeGymEnv):
         # Observations
 
         class ObservationPublisher(LeafSystem):
-            def __init__(self, noise: bool, camera_names: list[str], observation_mode: str):
+            def __init__(self, noise: bool, camera_names: list[str], observation_mode: str, output_model_value):
                 LeafSystem.__init__(self)
                 self.observation_mode = observation_mode
                 self.camera_input_port_index = {}
+                self.output_model_value = output_model_value
 
                 for camera_name in camera_names:
                     self.camera_input_port_index[camera_name] = self.DeclareAbstractInputPort(
@@ -353,7 +356,7 @@ class LiftCubeEnv(DrakeGymEnv):
                     "plant_states", plant.num_multibody_states()).get_index()
 
                 def alloc_fn():
-                    return Value(GymDictWrapper())
+                    return Value(self.output_model_value)
 
                 self.DeclareAbstractOutputPort(
                     "observations", alloc_fn, self.CalcObs)
@@ -374,10 +377,10 @@ class LiftCubeEnv(DrakeGymEnv):
                 plant.SetPositionsAndVelocities(
                     self.plant_context, plant_state)
 
-                observations = GymDictWrapper()
-                observations.values["arm_qpos"] = plant.GetPositions(
+                observations = self.output_model_value
+                observations["arm_qpos"] = plant.GetPositions(
                     context=self.plant_context, model_instance=robot_model_instance)
-                observations.values["arm_qvel"] = plant.GetVelocities(
+                observations["arm_qvel"] = plant.GetVelocities(
                     context=self.plant_context, model_instance=robot_model_instance)
 
                 if self.observation_mode in ["image", "both"]:
@@ -385,19 +388,20 @@ class LiftCubeEnv(DrakeGymEnv):
                         "front_camera": "image_front", "top_camera": "image_top"}
                     for camera_name, input_port_index in self.camera_input_port_index.items():
                         assert camera_name in image_name_mapping
-                        observations.values[image_name_mapping[camera_name]] = self.get_input_port(
-                            input_port_index).Eval(context).data
+                        observations[image_name_mapping[camera_name]] = self.get_input_port(
+                            input_port_index).Eval(context).data[:, :, :3] #remove alpha
                 if self.observation_mode in ["state", "both"]:
                     cube = plant.GetBodyByName("cube")
                     cube_pos = cube.EvalPoseInWorld(
                         self.plant_context).translation()
-                    observations.values["cube_pos"] = cube_pos
+                    observations["cube_pos"] = cube_pos
 
                 # Assign the output value.
                 output.set_value(observations)
 
+
         obs_pub = builder.AddSystem(ObservationPublisher(
-            noise=obs_noise, camera_names=self.camera_systems.keys(), observation_mode=self.observation_mode))
+            noise=obs_noise, camera_names=self.camera_systems.keys(), observation_mode=self.observation_mode, output_model_value = self.ConstructObservationSpace().sample()))
         obs_pub.set_name("obs_pub")
 
         for camera_name, camera_system in self.camera_systems.items():

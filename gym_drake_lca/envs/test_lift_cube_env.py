@@ -47,7 +47,7 @@ def main():
 
         print(f"reward={reward}")
         print("observations=")
-        for k, v in observations.values.items():
+        for k, v in observations.items():
             print(f"\t{k} : {v.shape}")
             if len(v.shape) == 3:  # check if it's an image
                 ax[k].imshow(v)
@@ -58,7 +58,7 @@ def main():
             print(f"image shape:{image.shape}")
 
             plt.axis("off")  # Hide axis
-            ax[args.render_mode].imshow(image.data)
+            ax[args.render_mode].imshow(image)
 
         elif args.render_mode in ["human"]:
             # Render every step

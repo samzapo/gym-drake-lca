@@ -75,7 +75,8 @@ def main():
 
     # Close the environment
     env.close()
-    plt.close(fig)
+    if is_displaying_images:
+        plt.close(fig)
 
 
 if __name__ == "__main__":

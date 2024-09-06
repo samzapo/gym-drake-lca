@@ -225,9 +225,9 @@ def ConstructLiftCubeEnvDefaultParameters():
                                                           np.array([-0.4, 0.4, 0.3]))}},
         "observation_cameras": ["image_front", "image_top"],
         "rgb_array_camera": "image_viewer",
-        "sim_time_step": 0.001,
+        "sim_time_step": 0.0,
         "gym_time_step": 0.05,
-        "gym_time_limit": 0.5,
+        "gym_time_limit": 9999999,
         # contact_models: 'point', 'hydroelastic_with_fallback'
         "contact_model": 'hydroelastic_with_fallback',
         # contact_approximations: 'sap', 'tamsi', 'similar', 'lagged'
@@ -318,6 +318,9 @@ class LiftCubeEnv(DrakeGymEnv):
                  action_mode="joint",
                  render_mode="human",
                  parameters=ConstructLiftCubeEnvDefaultParameters()):
+        print(f"observation_mode={observation_mode}")
+        print(f"action_mode={action_mode}")
+        print(f"render_mode={render_mode}")
         assert render_mode in self.metadata["render_modes"]
         assert observation_mode in self.metadata["observation_modes"]
         assert action_mode in self.metadata["action_modes"]
@@ -325,6 +328,7 @@ class LiftCubeEnv(DrakeGymEnv):
         self.observation_mode = observation_mode
         self.action_mode = action_mode
         self.render_mode = render_mode
+
 
         self.parameters = parameters
 
@@ -352,7 +356,7 @@ class LiftCubeEnv(DrakeGymEnv):
         elif self.action_mode == "ee":
             action_shape = 4
             return gym.spaces.Box(
-                low=np.array([-0.2, 0.0, 0.1, -np.pi]), high=np.array([0.2, 0.3, 0.3, np.pi]), dtype=np.float32)
+                low=np.array([-1, -1, 0, -np.pi]), high=np.array([1, 1, 1, np.pi]), dtype=np.float32)
 
     def ConstructObservationSpace(self):
         max_v = self.parameters["joint_max_velocities"]
@@ -710,6 +714,8 @@ class LiftCubeEnv(DrakeGymEnv):
         self.diagram = builder.Build()
         self.diagram.set_name("Diagram")
         simulator = Simulator(self.diagram)
+        if self.render_mode == "human":
+            simulator.set_target_realtime_rate(1.0)
         simulator.Initialize()
 
         if debug:

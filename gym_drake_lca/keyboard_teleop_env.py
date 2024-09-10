@@ -24,8 +24,8 @@ class Runner:
         # Sample random action
         sample = self.env.action_space.sample()
         sample[0] = 0.0
-        sample[1] = 0.2
-        sample[2] = 0.3
+        sample[1] = 0.14
+        sample[2] = 0.17
         sample[3] = 0.0
         self.init_action = sample
         print(f"init_action={self.init_action}")

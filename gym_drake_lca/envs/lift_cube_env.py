@@ -26,7 +26,7 @@ from pydrake.geometry import (
 from pydrake.gym import DrakeGymEnv
 from pydrake.math import RigidTransform, RollPitchYaw, RotationMatrix
 from pydrake.multibody.inverse_kinematics import (
-    DoDifferentialInverseKinematics,
+    DifferentialInverseKinematicsIntegrator,
     DifferentialInverseKinematicsResult,
     DifferentialInverseKinematicsParameters,
     DifferentialInverseKinematicsStatus,
@@ -74,138 +74,6 @@ from pydrake.visualization import (
 
 from gym_drake_lca import ASSETS_PATH
 
-
-def AddRobot(plant, parser):
-    (robot_model_instance,) = parser.AddModels(
-        f"{ASSETS_PATH}/low-cost-arm.urdf")
-
-    X_WI = RigidTransform.Identity()
-    plant.WeldFrames(plant.world_frame(),
-                     plant.GetFrameByName("base_link", robot_model_instance), X_WI)
-    return robot_model_instance
-
-
-def ConstructRobotPlant():
-    # Construct Robot-only Plant
-    robot_plant = MultibodyPlant(0)
-    parser = Parser(plant=robot_plant)
-    AddRobot(robot_plant, parser)
-    robot_plant.Finalize()
-    return robot_plant
-
-
-class DifferentialIKIntegrator(LeafSystem):
-    def __init__(self, plant, params: DifferentialInverseKinematicsParameters, is_discrete):
-        LeafSystem.__init__(self)
-        self.params = params
-
-        self.ConstructRobotIkPlantAndContext()
-
-        self.DeclareContinuousState(
-            num_state_variables=self.plant.num_multibody_states())
-
-        self.state_input_port_index = self.DeclareVectorInputPort(
-            "estimated_state", self.plant.num_multibody_states()).get_index()
-
-        self.ee_goal_input_port_index = self.DeclareVectorInputPort(
-            "ee_goal", 3 + 1).get_index()  # [x, y, z, gripper]
-
-        self.end_effector = self.plant.GetBodyByName("gripper_static_part")
-        assert self.thumb_joint.num_velocities() == 1
-
-        self.DeclareVectorOutputPort(
-            "desired_state", self.plant.num_multibody_states(), self.CalcDesiredState)
-
-    def DoCalcTimeDerivatives(self, context, continuous_state):
-        q_v = self.get_input_port(
-            self.state_input_port_index).Eval(context)
-        self.plant.SetPositionsAndVelocities(self.plant_context, q_v)
-
-        self.params.set_nominal_joint_position(
-            self.plant.GetPositions(self.plant_context))
-
-        dt = self.params.get_time_step()
-        dist = self.IntegrateIk(context)
-        # print(f"dist={dist}")
-        next_q_v = self.plant.GetPositionsAndVelocities(self.plant_context)
-        v_vdot = (next_q_v - q_v) / dt
-        continuous_state.get_mutable_vector().SetFromVector(v_vdot)
-
-    def CalcDesiredState(self, context, output):
-        output.set_value(context.get_continuous_state_vector().value())
-
-    def ConstructRobotIkPlantAndContext(self):
-        # Construct Robot-only Plant
-        self.plant = ConstructRobotPlant()
-        self.thumb_joint = self.plant.GetJointByName("joint_7")
-
-        self.plant_context = self.plant.CreateDefaultContext()
-        # Lock thumb in place (exclude from jacobian).
-        self.thumb_joint.Lock(self.plant_context)
-
-    def CalcJacobianTranslationalVelocity(self):
-        world_frame = self.plant.world_frame()
-        Js_v_WBo = self.plant.CalcJacobianTranslationalVelocity(
-            context=self.plant_context, with_respect_to=JacobianWrtVariable.kV, frame_B=self.end_effector.body_frame(),
-            p_BoBi_B=np.zeros(3), frame_A=world_frame, frame_E=world_frame)
-
-        return Js_v_WBo
-
-    def IntegrateIk(self, context):
-        q = self.plant.GetPositions(self.plant_context)
-        v = self.plant.GetVelocities(self.plant_context)
-
-        ee_goal = self.get_input_port(
-            self.ee_goal_input_port_index).Eval(context)
-
-        thumb_angle = ee_goal[3]
-
-        p_WoBo_W_des = ee_goal[0:3]
-        p_WoBo_W = self.end_effector.EvalPoseInWorld(
-            self.plant_context).translation()
-
-        dt = self.params.get_time_step()
-
-        v_WBo_W = (p_WoBo_W_des - p_WoBo_W)/dt
-
-        v_next = v
-
-        # Calc IK Step
-        Js_v_WBo = self.CalcJacobianTranslationalVelocity()
-
-        result = DoDifferentialInverseKinematics(q, v,
-                                                 v_WBo_W,
-                                                 Js_v_WBo,
-                                                 self.params)
-        if result.status == DifferentialInverseKinematicsStatus.kSolutionFound:
-            v_next = 1.0 * result.joint_velocities
-
-        # integrate IK step
-        q_step = dt * v_next
-        q_next = q + q_step
-
-        q_next[self.thumb_joint.position_start()] = thumb_angle
-        v_next[self.thumb_joint.velocity_start()] = 0
-
-        self.plant.SetPositionsAndVelocities(
-            self.plant_context, np.concatenate((q_next, v_next)))
-        p_WoBo_W = self.end_effector.EvalPoseInWorld(
-            self.plant_context).translation()
-        dist = np.linalg.norm(p_WoBo_W_des - p_WoBo_W)
-
-        # print(f"q,v={q},{v}")
-        # print(f"thumb_angle={thumb_angle}")
-        # print(f"p_WoBo_W_des={p_WoBo_W_des}")
-        # print(f"p_WoBo_W={p_WoBo_W}")
-        # print(f"dt={dt}")
-        # print(f"v_WBo_W={v_WBo_W}")
-        # print(f"Js_v_WBo={Js_v_WBo}")
-        # print(f"next: q,v={q_next},{v_next}")
-        # print(f"dist={dist}")
-
-        return dist
-
-
 def ConstructLiftCubeEnvDefaultParameters():
     # Tunable parameters
     image_dims = [240, 320]
@@ -237,8 +105,8 @@ def ConstructLiftCubeEnvDefaultParameters():
         "obs_state_noise_magnitude": 0.0,
         "cube_pos_bounds": [np.array([-0.15, 0.10, 0.015]), np.array([0.15, 0.25, 0.015])],
         "external_force_disturbances": {"magnitude": 0.0, "period": 1.0, "duration": 0.1},
-        "emit_debug_printout": False,
-        "ik_time_step": 0.001,
+        "emit_debug_printout": True,
+        "ik_time_step": 0.005,
         "ik_velocity_limit_factor": 1.0,
         "joint_max_velocities": 10.0,
     }
@@ -329,7 +197,6 @@ class LiftCubeEnv(DrakeGymEnv):
         self.action_mode = action_mode
         self.render_mode = render_mode
 
-
         self.parameters = parameters
 
         # Make simulation.
@@ -377,6 +244,24 @@ class LiftCubeEnv(DrakeGymEnv):
                 low=-10.0, high=10.0, shape=(3,))
         return gym.spaces.Dict(observation_subspaces)
 
+    def AddRobot(self, plant, parser):
+        (robot_model_instance,) = parser.AddModels(
+            f"{ASSETS_PATH}/low-cost-arm.urdf")
+
+        X_WI = RigidTransform.Identity()
+        plant.WeldFrames(plant.world_frame(),
+                        plant.GetFrameByName("base_link", robot_model_instance), X_WI)
+        return robot_model_instance
+
+
+    def ConstructRobotPlant(self):
+        # Construct Robot-only Plant
+        robot_plant = MultibodyPlant(0)
+        parser = Parser(plant=robot_plant)
+        self.AddRobot(robot_plant, parser)
+        robot_plant.Finalize()
+        return robot_plant
+
     def AddOtherObjects(self, plant, parser):
         (ground_plane_model_instance,) = parser.AddModels(
             f"{ASSETS_PATH}/collision_ground_plane.sdf")
@@ -390,7 +275,7 @@ class LiftCubeEnv(DrakeGymEnv):
 
     def AddModels(self, plant):
         parser = Parser(plant=plant)
-        robot_model_instance = AddRobot(plant, parser)
+        robot_model_instance = self.AddRobot(plant, parser)
         self.AddOtherObjects(plant, parser)
         return robot_model_instance
 
@@ -439,6 +324,19 @@ class LiftCubeEnv(DrakeGymEnv):
         builder.Connect(pid_controller.get_output_port(),  # [u] actuation
                         plant.get_actuation_input_port(robot_model_instance))
 
+        desired_velocities = builder.AddSystem(
+            ConstantVectorSource([0]*nv))
+        desired_velocities.set_name("desired_velocities")
+
+        state_mux = builder.AddSystem(Multiplexer(input_sizes=[nq, nv]))
+        state_mux.set_name("state_mux")
+
+        builder.Connect(desired_velocities.get_output_port(),
+                        state_mux.get_input_port(1))  # [v] desired velocities
+    
+        builder.Connect(state_mux.get_output_port(0),  # [q v] desired state
+                        pid_controller.get_input_port_desired_state())
+        
         if self.action_mode == "ee":
             # TODO: Add IK solver for 'ee' mode.
             ik_params = DifferentialInverseKinematicsParameters(nq, nv)
@@ -448,40 +346,51 @@ class LiftCubeEnv(DrakeGymEnv):
                 nv) * self.parameters["joint_max_velocities"]
             factor = self.parameters["ik_velocity_limit_factor"]
             ik_params.set_time_step(ik_time_step)
-            ik_params.set_joint_velocity_limits((-factor*joint_max_velocities,
-                                                 factor*joint_max_velocities))
+            # ik_params.set_joint_velocity_limits((-factor*joint_max_velocities,
+            #                                      factor*joint_max_velocities))
+            robot_plant = self.ConstructRobotPlant()
+            world_frame = robot_plant.world_frame()
 
-            differential_ik_integrator = builder.AddSystem(
-                DifferentialIKIntegrator(plant=plant, params=ik_params, is_discrete=(0.0 < self.parameters["sim_time_step"])))
-            differential_ik_integrator.set_name("IK")
+            differential_ik = builder.AddSystem(
+                DifferentialInverseKinematicsIntegrator(robot=robot_plant,
+                                                        frame_A=world_frame,
+                                                        frame_E=robot_plant.GetBodyByName(
+                                                            "gripper_static_part").body_frame(),
+                                                        time_step=ik_time_step,
+                                                        parameters=ik_params))
+            differential_ik.set_name("IK")
 
-            builder.ExportInput(differential_ik_integrator.get_input_port(differential_ik_integrator.ee_goal_input_port_index),
+            class ActionsToPose(LeafSystem):
+                def __init__(self):
+                    LeafSystem.__init__(self)
+
+                    self.DeclareVectorInputPort("action", 4)
+                    self.DeclareAbstractOutputPort("pose", lambda: Value(RigidTransform.Identity()), self.CalcPose)
+
+                def CalcPose(self, context, output):
+                   action = self.get_input_port(0).Eval(context)
+                   angle = np.atan2(-action[0], action[1])
+                   X_WB = RigidTransform(RotationMatrix.MakeZRotation(0), action[0:3])
+                   output.set_value(X_WB)
+
+            input_converter = builder.AddSystem(ActionsToPose())
+            input_converter.set_name("input_converter")
+
+            builder.ExportInput(input_converter.get_input_port(0),
                                 "actions")  # [q] desired positions
-
-            builder.Connect(differential_ik_integrator.get_output_port(0),  # [q v] desired state
-                            pid_controller.get_input_port_desired_state())
-
-            builder.Connect(plant.get_state_output_port(robot_model_instance),  # [q v] all current states
-                            differential_ik_integrator.get_input_port(differential_ik_integrator.state_input_port_index))
+            
+            builder.Connect(differential_ik.GetOutputPort("joint_positions"),
+                            state_mux.get_input_port(0))  # [v] desired velocities
+            
+            builder.Connect(input_converter.get_output_port(0),
+                            differential_ik.GetInputPort("X_WE_desired"))
 
         else:
             assert self.action_mode == "joint"
 
-            desired_velocities = builder.AddSystem(
-                ConstantVectorSource([0]*nv))
-            desired_velocities.set_name("desired_velocities")
-
-            state_mux = builder.AddSystem(Multiplexer(input_sizes=[nq, nv]))
-            state_mux.set_name("state_mux")
-
             builder.ExportInput(state_mux.get_input_port(0),
                                 "actions")  # [q] desired positions
 
-            builder.Connect(desired_velocities.get_output_port(),
-                            state_mux.get_input_port(1))  # [v] desired velocities
-
-            builder.Connect(state_mux.get_output_port(0),  # [q v] desired state
-                            pid_controller.get_input_port_desired_state())
 
         #########################################################################
         # Reward
@@ -511,8 +420,10 @@ class LiftCubeEnv(DrakeGymEnv):
                 cube_pos = cube.EvalPoseInWorld(
                     self.plant_context).translation()
                 cube_z = cube_pos[2]
-                ee_pos = gripper_moving_side.EvalPoseInWorld(
-                    self.plant_context).translation()
+                X_WB = gripper_moving_side.EvalPoseInWorld(
+                    self.plant_context)
+                print(f"X_WB={X_WB}")
+                ee_pos = X_WB.translation()
                 ee_to_cube = np.linalg.norm(ee_pos - cube_pos)
 
                 # Compute the reward
@@ -720,7 +631,9 @@ class LiftCubeEnv(DrakeGymEnv):
 
         if debug:
             def monitor(context, gym_time_limit=self.parameters["gym_time_limit"]):
-                print(f"t={context.get_time()}")
+                # print(f"t={context.get_time()}")
+                # self.diagram.GetSubSystemContext(plant, context)
+
                 # Truncation: the episode duration reaches the time limit.
                 if context.get_time() > gym_time_limit:
                     if debug:
@@ -748,7 +661,8 @@ class LiftCubeEnv(DrakeGymEnv):
                     if depth > max_depth:
                         if debug:
                             print("Excessive Contact with Environment.")
-                        return EventStatus.Failed(self.diagram, "Excessive Contact with Environment.")
+                        return EventStatus.ReachedTermination(self.diagram, "Excessive Contact with Environment.")
+
                 return EventStatus.Succeeded()
 
             simulator.set_monitor(monitor)

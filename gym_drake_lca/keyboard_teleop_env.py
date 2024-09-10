@@ -31,46 +31,45 @@ class Runner:
         print(f"init_action={self.init_action}")
         assert self.env.action_space.contains(self.init_action)
 
-        self.action = self.init_action
-
+        self.action = self.init_action * 1.0
+        self.is_resetting = False
         def on_press(key):
-            try:
-            #     print('alphanumeric key {0} pressed'.format(
-            #         key.char))
-                if key.char == 'r':
-                    self.action = self.init_action
-                elif key.char == 'a':
-                    self.action[0] -= 0.01
-                elif key.char == 'd':
-                    self.action[0] += 0.01
-                elif key.char == 'w':
-                    self.action[3] -= 0.01
-                elif key.char == 's':
-                    self.action[3] += 0.01
-            except AttributeError:
-            #     print('special key {0} pressed'.format(
-            #         key))
-                if key == Key.up:
-                    self.action[2] += 0.01
-                elif key == Key.down:
-                    self.action[2] -= 0.01
-                elif key == Key.left:  # +y
-                    self.action[1] += 0.01
-                elif key == Key.right:
-                    self.action[1] -= 0.01
+            # Y
+            if key == Key.up:
+                self.action[1] += 0.01
+            elif key == Key.down:
+                self.action[1] -= 0.01
+            # X
+            elif key == Key.left:
+                self.action[0] -= 0.01
+            elif key == Key.right:
+                self.action[0] += 0.01
+            # Z
+            elif key == Key.page_down: 
+                self.action[2] -= 0.01
+            elif key == Key.page_up:
+                self.action[2] += 0.01
+            # Gripper
+            elif key == Key.home: 
+                self.action[3] -= 0.1
+            elif key == Key.end:
+                self.action[3] += 0.1
+            elif key == Key.backspace:
+                self.is_resetting = True
+                
 
         def on_release(key):
             # print('{0} released'.format(
-                # key))
+            # key))
             if key == keyboard.Key.esc:
                 self.is_closing = True
                 # Stop listener
                 return False
 
-        listener = keyboard.Listener(
+        self.listener = keyboard.Listener(
             on_press=on_press,
             on_release=on_release)
-        listener.start()
+        self.listener.start()
 
     def run(self):
         # The event listener will be running in this block
@@ -80,11 +79,15 @@ class Runner:
             observation, reward, terminted, truncated, info = self.env.step(
                 self.action)
             self.env.render()
+            if self.is_resetting:
+                self.is_resetting = False
+                self.env.reset()
             if self.is_closing:
                 break
 
         # Close the environment
         self.env.close()
+        self.listener.stop()
 
 
 if __name__ == "__main__":

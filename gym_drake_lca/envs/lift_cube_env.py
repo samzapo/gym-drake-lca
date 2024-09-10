@@ -54,6 +54,7 @@ from pydrake.systems.framework import (
     PortDataType,
     Context,
     BasicVector,
+    State,
 )
 from pydrake.systems.primitives import (
     ConstantVectorSource,
@@ -109,7 +110,7 @@ class DifferentialIKIntegrator(LeafSystem):
 
         # TODO: Move to parameters.
         self.end_effector = self.plant.GetBodyByName("gripper_static_part")
-        self.p_BoBi_B = np.array([0,0.05,0])
+        self.p_BoBi_B = np.array([0, 0.05, 0])
 
         assert self.thumb_joint.num_velocities() == 1
 
@@ -120,16 +121,14 @@ class DifferentialIKIntegrator(LeafSystem):
         # q_v = self.get_input_port(
         #     self.state_input_port_index).Eval(context)
         # self.plant.SetPositionsAndVelocities(self.plant_context, q_v)
-        # self.params.set_nominal_joint_position(
-        #     self.plant.GetPositions(self.plant_context))
 
-        kMaxIter : int = 100
-        iter : int = 0
-        dist : np.float32 = np.inf
-        kDistanceTol = 0.005
+        kMaxIter: int = 10
+        iter: int = 0
+        dist: np.float32 = np.inf
+        kDistanceTol = 0.001
         while (iter < kMaxIter) and (dist > kDistanceTol):
             iter = iter + 1
-            dist = self.IntegrateIk(context, iter % 10 == 0)
+            dist = self.IntegrateIk(context)
         next_q_v = self.plant.GetPositionsAndVelocities(self.plant_context)
         output.set_value(next_q_v)
         # input("press to continue")
@@ -151,7 +150,7 @@ class DifferentialIKIntegrator(LeafSystem):
 
         return Js_v_WBo
 
-    def IntegrateIk(self, context, debug = False):
+    def IntegrateIk(self, context):
         q = self.plant.GetPositions(self.plant_context)
         v = self.plant.GetVelocities(self.plant_context)
 
@@ -166,18 +165,27 @@ class DifferentialIKIntegrator(LeafSystem):
 
         dt = self.params.get_time_step()
 
-        v_WBo_W = (p_WoBo_W_des - p_WoBo_W)
-        speed = np.linalg.norm(v_WBo_W)
-        kMaxSpeed = 0.1
-        # if speed > kMaxSpeed:
-        v_WBo_W = kMaxSpeed * v_WBo_W / np.linalg.norm(v_WBo_W)
-        
+        v_WBo_W = (p_WoBo_W_des - p_WoBo_W) / dt
+
+        v_next = v
+        q_next = q
+
         # Calc IK Step
         Js_v_WBo = self.CalcJacobianTranslationalVelocity()
-        pinv=np.linalg.pinv(Js_v_WBo)
+        pinv = Js_v_WBo.transpose()
+        try:
+            pinv = np.linalg.pinv(Js_v_WBo)
+        except:
+            pass
 
         v_next = pinv @ v_WBo_W
-        
+        (v_lb, v_ub) = self.params.get_joint_velocity_limits()
+        for i in range(v_next.shape[0]):
+            if v_next[i] < v_lb[i]:
+                v_next[i] = v_lb[i]
+            elif v_ub[i] < v_next[i]:
+                v_next[i] = v_ub[i]
+
         # integrate IK step
         q_step = dt * v_next
         q_next = q + q_step
@@ -185,26 +193,14 @@ class DifferentialIKIntegrator(LeafSystem):
         q_next[self.thumb_joint.position_start()] = thumb_angle
         v_next[self.thumb_joint.velocity_start()] = 0
 
-        self.plant.SetPositions(self.plant_context,q_next)
-        self.plant.SetVelocities(self.plant_context,v_next * 0.0)
+        self.plant.SetPositions(self.plant_context, q_next)
+        # Zero velocities.
+        self.plant.SetVelocities(self.plant_context, v_next * 0.0)
 
         # self.plant.SetPositionsAndVelocities(self.plant_context, np.concatenate((q_next, v_next)))
         p_WoBo_W = self.end_effector.EvalPoseInWorld(
             self.plant_context).translation()
         dist = np.linalg.norm(p_WoBo_W_des - p_WoBo_W)
-
-        if debug:
-            np.set_printoptions(precision=3)
-            np.set_printoptions(suppress=True)
-            # print(f"q,v={q},{v}")
-            print(f"p_WoBo_W_des={p_WoBo_W_des}")
-            print(f"diff={p_WoBo_W_des - p_WoBo_W}")
-            print(f"p_WoBo_W={p_WoBo_W}")
-            print(f"v_WBo_W={v_WBo_W}")
-            # print(f"Js_v_WBo={Js_v_WBo}")
-            # print(f"pinv={pinv}")
-            # print(f"next: q,v={q_next},{v_next}")
-            print(f"dist={dist}\n")
 
         return dist
 
@@ -228,18 +224,18 @@ def ConstructLiftCubeEnvDefaultParameters():
                                                           np.array([-0.4, 0.4, 0.3]))}},
         "observation_cameras": ["image_front", "image_top"],
         "rgb_array_camera": "image_viewer",
-        "sim_time_step": 0.001,
-        "gym_time_step": 0.1,
-        "gym_time_limit": 0.5,
+        "sim_time_step": 0.0,
+        "gym_time_step": 1/30,
+        "gym_time_limit": np.inf,
         # contact_models: 'point', 'hydroelastic_with_fallback'
         "contact_model": 'hydroelastic_with_fallback',
         # contact_approximations: 'sap', 'tamsi', 'similar', 'lagged'
         "contact_approximation": 'sap',
-        "pid_gains": {"kp": 20.0, "ki": 0.0, "kd": 0.1},
+        "pid_gains": {"kp": 1.0, "ki": 0.0, "kd": 0.1},
         "lift_reward_threshold_height": 0.5,
         "obs_state_noise_magnitude": 0.0,
         "cube_pos_bounds": [np.array([-0.15, 0.10, 0.015]), np.array([0.15, 0.25, 0.015])],
-        "external_force_disturbances": {"magnitude": 0.001, "period": 1.0, "duration": 0.1},
+        "external_force_disturbances": {"magnitude": 0.0, "period": 1.0, "duration": 0.1},
         "emit_debug_printout": False,
         "ik_time_step": 0.001,
         "ik_velocity_limit_factor": 1.0,
@@ -321,6 +317,9 @@ class LiftCubeEnv(DrakeGymEnv):
                  action_mode="joint",
                  render_mode="human",
                  parameters=ConstructLiftCubeEnvDefaultParameters()):
+        print(f"observation_mode={observation_mode}")
+        print(f"action_mode={action_mode}")
+        print(f"render_mode={render_mode}")
         assert render_mode in self.metadata["render_modes"]
         assert observation_mode in self.metadata["observation_modes"]
         assert action_mode in self.metadata["action_modes"]
@@ -355,7 +354,7 @@ class LiftCubeEnv(DrakeGymEnv):
         elif self.action_mode == "ee":
             action_shape = 4
             return gym.spaces.Box(
-                low=np.array([-0.2, 0.0, 0.1, -np.pi]), high=np.array([0.2, 0.3, 0.3, np.pi]), dtype=np.float32)
+                low=np.array([-1, -1, 0, -np.pi]), high=np.array([1, 1, 1, np.pi]), dtype=np.float32)
 
     def ConstructObservationSpace(self):
         max_v = self.parameters["joint_max_velocities"]
@@ -377,13 +376,13 @@ class LiftCubeEnv(DrakeGymEnv):
         return gym.spaces.Dict(observation_subspaces)
 
     def AddOtherObjects(self, plant, parser):
-        # (ground_plane_model_instance,) = parser.AddModels(
-        #     f"{ASSETS_PATH}/collision_ground_plane.sdf")
+        (ground_plane_model_instance,) = parser.AddModels(
+            f"{ASSETS_PATH}/collision_ground_plane.sdf")
 
-        # # Weld ground to world frame.
-        # X_WI = RigidTransform.Identity()
-        # plant.WeldFrames(plant.world_frame(),
-        #                  plant.GetFrameByName("ground_plane_box", ground_plane_model_instance), X_WI)
+        # Weld ground to world frame.
+        X_WI = RigidTransform.Identity()
+        plant.WeldFrames(plant.world_frame(),
+                         plant.GetFrameByName("ground_plane_box", ground_plane_model_instance), X_WI)
 
         parser.AddModels(f"{ASSETS_PATH}/cube.sdf")
 
@@ -394,7 +393,6 @@ class LiftCubeEnv(DrakeGymEnv):
         return robot_model_instance
 
     def ConstructSimulator(self, debug):
-
         builder = DiagramBuilder()
 
         multibody_plant_config = MultibodyPlantConfig(
@@ -407,7 +405,7 @@ class LiftCubeEnv(DrakeGymEnv):
         plant, scene_graph = AddMultibodyPlant(multibody_plant_config, builder)
         plant.set_name("plant")
 
-        gravity_vector = np.array([0.0, 0.0, 0.0])
+        gravity_vector = np.array([0.0, 0.0, -9.81])
         plant.mutable_gravity_field().set_gravity_vector(gravity_vector)
 
         robot_model_instance = self.AddModels(plant)
@@ -419,7 +417,7 @@ class LiftCubeEnv(DrakeGymEnv):
 
         # Add visualizer to the plant and update only when render() is called (inf period).
         viz_config: VisualizationConfig = VisualizationConfig()
-        # viz_config.publish_period = np.inf
+        viz_config.publish_period = np.inf
         ApplyVisualizationConfig(config=viz_config, builder=builder)
 
         #########################################################################
@@ -450,7 +448,8 @@ class LiftCubeEnv(DrakeGymEnv):
             ik_params.set_joint_velocity_limits((-factor*joint_max_velocities,
                                                  factor*joint_max_velocities))
 
-            differential_ik_integrator = builder.AddSystem(DifferentialIKIntegrator(plant=plant, params=ik_params))
+            differential_ik_integrator = builder.AddSystem(
+                DifferentialIKIntegrator(plant=plant, params=ik_params))
             differential_ik_integrator.set_name("IK")
 
             builder.ExportInput(differential_ik_integrator.get_input_port(differential_ik_integrator.ee_goal_input_port_index),
@@ -712,11 +711,12 @@ class LiftCubeEnv(DrakeGymEnv):
         self.diagram = builder.Build()
         self.diagram.set_name("Diagram")
         simulator = Simulator(self.diagram)
+        if self.render_mode == "human":
+            simulator.set_target_realtime_rate(1.0)
         simulator.Initialize()
 
         if debug:
             def monitor(context, gym_time_limit=self.parameters["gym_time_limit"]):
-                print(f"t={context.get_time()}")
                 # Truncation: the episode duration reaches the time limit.
                 if context.get_time() > gym_time_limit:
                     if debug:
@@ -744,7 +744,7 @@ class LiftCubeEnv(DrakeGymEnv):
                     if depth > max_depth:
                         if debug:
                             print("Excessive Contact with Environment.")
-                        return EventStatus.Failed(self.diagram, "Excessive Contact with Environment.")
+                        return EventStatus.ReachedTermination(self.diagram, "Excessive Contact with Environment.")
                 return EventStatus.Succeeded()
 
             simulator.set_monitor(monitor)
@@ -763,7 +763,7 @@ class LiftCubeEnv(DrakeGymEnv):
     def HandleReset(self, simulator, diagram_context, seed):
         # Reset the Diagram context to default.
         self.diagram = simulator.get_system()
-        diagram_context = self.diagram.CreateDefaultContext()
+        self.diagram.SetDefaultContext(diagram_context)
 
         # Set the seed.
         np.random.seed(seed)

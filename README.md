@@ -1,49 +1,70 @@
-# Initial Setup
-## Setup PyEnv
+# gym-drake-lca
 
-https://github.com/pyenv/pyenv
+A gym environment for [Low-Cost Robot Arm](https://github.com/AlexanderKoch-Koch/low_cost_robot) in [Drake](https://github.com/RobotLocomotion/drake).
 
+## Installation
 
-```
-pyenv install 3.10.4
-pyenv global 3.10.4
-```
-
-## Setup Drake
-
-```
-https://drake.mit.edu/pip.html
+Create a virtual environment with Python 3.10 and activate it, e.g. with [`miniconda`](https://docs.anaconda.com/free/miniconda/index.html):
+```bash
+conda create -y -n gym-drake-lca python=3.10 && conda activate gym-drake-lca
 ```
 
-check that the installation worked
-
-## Setup Blender (optional, for mesh conversion)
-
-```
-snap install blender --classic
-pip install bpy
+Install gym-drake-lca:
+```bash
+pip install gym-drake-lca
 ```
 
-## Setup Project
 
-```
-source env/bin/activate
-pip install -e .
+## Quickstart
+
+```python
+# example.py
+import imageio
+import gymnasium as gym
+import numpy as np
+import gym_drake_lca
+
+env = gym.make("LiftCube-v0")
+observation, info = env.reset()
+frames = []
+
+N = 100
+for i in range(N):
+    env.reset()
+    action = env.action_space.sample()
+    observation, reward, terminated, truncated, info = env.step(action)
+    image = env.render()
+    frames.append(image)
+
+    if terminated or truncated:
+        observation, info = env.reset()
+
+env.close()
+imageio.mimsave("example.mp4", np.stack(frames), fps=25)
 ```
 
-# Tests
+## Contribute
 
-## Just Drake
-```
-python3 gym_drake_lca/lca_passive_simulation.py
-```
+Instead of using `pip` directly, we use `poetry` for development purposes to easily track our dependencies.
+If you don't have it already, follow the [instructions](https://python-poetry.org/docs/#installation) to install it.
 
-## DrakeGymEnv
-```
-python3 gym_drake_lca/envs/test_lift_cube_env.py
+Install the project with dev dependencies:
+```bash
+poetry install --all-extras
 ```
 
-## DrakeGymEnv + Gym
+
+### Follow our style
+
+```bash
+# install pre-commit hooks
+pre-commit install
+
+# apply style and linter checks on staged files
+pre-commit
 ```
-python3 gym_drake_lca/envs/test_env.py
-```
+
+## Acknowledgment
+
+These instrutions are adapted from [gym-aloha](https://github.com/huggingface/gym-aloha)
+This project is adapted from [gym-lowcostrobot](https://github.com/perezjln/gym-lowcostrobot)

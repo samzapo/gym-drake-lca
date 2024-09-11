@@ -3,11 +3,14 @@ import gymnasium as gym
 import numpy as np
 import gym_drake_lca
 
-env = gym.make("gym_drake_lca/LiftCube-v0")
+env = gym.make("LiftCube-v0")
 observation, info = env.reset()
 frames = []
 
-for _ in range(1000):
+N = 100
+for i in range(N):
+    print(f"{100 * i/N}%")
+    env.reset()
     action = env.action_space.sample()
     observation, reward, terminated, truncated, info = env.step(action)
     image = env.render()

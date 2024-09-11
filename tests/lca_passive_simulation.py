@@ -11,7 +11,7 @@ from pydrake.visualization import AddDefaultVisualization
 
 def add_models_to_plant(mbp: MultibodyPlant):
     parser = Parser(plant=mbp)
-    (lca_model_instance,) = parser.AddModels("gym_drake_lca/low-cost-arm.urdf")
+    (lca_model_instance,) = parser.AddModels("gym_drake_lca/assets/low-cost-arm.urdf")
     (ground_plane_model_instance,) = parser.AddModels("gym_drake_lca/assets/collision_ground_plane.sdf")
 
     # Weld model instances to world frame.

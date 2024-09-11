@@ -1,18 +1,15 @@
-from gym_drake_lca.envs.lift_cube_env import LiftCubeEnv
-
 import argparse
-import pydrake
 import logging
 
 import matplotlib.pyplot as plt
-import matplotlib.image as mpimg
+import pydrake
 
-import time
+from gym_drake_lca.envs.lift_cube_env import LiftCubeEnv
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--render_mode", type=str, default="human")
+    parser.add_argument("--render_mode", type=str, default="rgb_array")
     parser.add_argument("--observation_mode", type=str, default="both")
     parser.add_argument("--action_mode", type=str, default="joint")
     args = parser.parse_args()
@@ -22,8 +19,9 @@ def main():
     pydrake.common.configure_logging()
 
     # Create the environment
-    env = LiftCubeEnv(observation_mode=args.observation_mode,
-                      action_mode=args.action_mode, render_mode=args.render_mode)
+    env = LiftCubeEnv(
+        observation_mode=args.observation_mode, action_mode=args.action_mode, render_mode=args.render_mode
+    )
 
     # Reset the environment
     observation, info = env.reset()
@@ -31,8 +29,9 @@ def main():
     ax = {}
     is_displaying_images = (args.render_mode in ["rgb_array"]) or (args.observation_mode in ["image", "both"])
     if is_displaying_images:
-        fig, ((_, ax["image_top"]), (ax["image_front"], ax["rgb_array"])
-              ) = plt.subplots(nrows=2, ncols=2, sharex='all', sharey='all')
+        fig, ((_, ax["image_top"]), (ax["image_front"], ax["rgb_array"])) = plt.subplots(
+            nrows=2, ncols=2, sharex="all", sharey="all"
+        )
         plt.axis("off")  # Hide axis
         fig.show()
 

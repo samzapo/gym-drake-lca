@@ -1,3 +1,5 @@
+from contextlib import suppress
+
 import gymnasium as gym
 import matplotlib.pyplot as plt
 import numpy as np
@@ -125,19 +127,6 @@ class DifferentialIKIntegrator(LeafSystem):
         # Lock thumb in place (exclude from jacobian).
         self.thumb_joint.Lock(self.plant_context)
 
-    def calc_jacobian_translational_velocity(self):
-        world_frame = self.plant.world_frame()
-        Js_v_WBo = self.plant.calc_jacobian_translational_velocity(  # noqa: N806
-            context=self.plant_context,
-            with_respect_to=JacobianWrtVariable.kV,
-            frame_B=self.end_effector.body_frame(),
-            p_BoBi_B=self.p_BoBi_B,
-            frame_A=world_frame,
-            frame_E=world_frame,
-        )
-
-        return Js_v_WBo
-
     def integrate_ik(self, context):
         q = self.plant.GetPositions(self.plant_context)
         v = self.plant.GetVelocities(self.plant_context)
@@ -157,8 +146,17 @@ class DifferentialIKIntegrator(LeafSystem):
         q_next = q
 
         # Calc IK Step
-        Js_v_WBo = self.calc_jacobian_translational_velocity()  # noqa: N806
-        pinv = np.linalg.pinv(Js_v_WBo)
+        Js_v_WBo = self.plant.CalcJacobianTranslationalVelocity(  # noqa: N806
+            context=self.plant_context,
+            with_respect_to=JacobianWrtVariable.kV,
+            frame_B=self.end_effector.body_frame(),
+            p_BoBi_B=self.p_BoBi_B,
+            frame_A=self.plant.world_frame(),
+            frame_E=self.plant.world_frame(),
+        )
+        pinv = Js_v_WBo.transpose()
+        with suppress(np.linalg.LinAlgError):
+            pinv = np.linalg.pinv(Js_v_WBo)
 
         v_next = pinv @ v_WBo_W
         (v_lb, v_ub) = self.params.get_joint_velocity_limits()

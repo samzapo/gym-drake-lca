@@ -349,6 +349,17 @@ class LiftCubeEnv(DrakeGymEnv):
             reset_handler=self.handle_reset,
         )
 
+    def step(self, action):
+        observation, reward, terminated, truncated, info = super().step(action)
+
+        info["timestamp"] = self.simulator.get_context().get_time()
+        return observation, reward, terminated, truncated, info
+
+    def reset(self, *, seed=None, options=None):
+        observation, info = super().reset(seed=seed, options=options)
+        info["timestamp"] = self.simulator.get_context().get_time()
+        return observation, info
+
     def construct_action_space(self):
         if self.action_mode == "joint":
             action_shape = 5

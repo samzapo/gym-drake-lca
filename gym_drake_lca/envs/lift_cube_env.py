@@ -232,6 +232,9 @@ def construct_lift_cube_env_default_params():
         "ik_time_step": 0.001,
         "ik_velocity_limit_factor": 1.0,
         "joint_max_velocities": 10.0,
+        "manipulands": [
+            f"{ASSETS_PATH}/red_cube.sdf",
+        ],
     }
 
 
@@ -311,10 +314,14 @@ class LiftCubeEnv(DrakeGymEnv):
         observation_mode="state",
         action_mode="joint",
         render_mode="rgb_array",
-        parameters=None,
+        parameters: dict | None = None,
     ):
-        if parameters is None:
-            parameters = construct_lift_cube_env_default_params()
+        self.parameters = construct_lift_cube_env_default_params()
+        if parameters is not None:
+            for key, value in parameters.items():
+                current_value = self.parameters[key]
+                assert type(value) == type(current_value)
+                self.parameters[key] = value
 
         print(f"observation_mode={observation_mode}")
         print(f"action_mode={action_mode}")
@@ -326,8 +333,6 @@ class LiftCubeEnv(DrakeGymEnv):
         self.observation_mode = observation_mode
         self.action_mode = action_mode
         self.render_mode = render_mode
-
-        self.parameters = parameters
 
         # Make simulation.
         simulator = self.construct_simulator(debug=self.parameters["emit_debug_printout"])
@@ -399,8 +404,8 @@ class LiftCubeEnv(DrakeGymEnv):
             plant.GetFrameByName("ground_plane_box", ground_plane_model_instance),
             identity,
         )
-
-        parser.AddModels(f"{ASSETS_PATH}/cube.sdf")
+        for manipuland_path in self.parameters["manipulands"]:
+            parser.AddModels(manipuland_path)
 
     def add_models_to_plant(self, plant):
         parser = Parser(plant=plant)
@@ -762,6 +767,7 @@ class LiftCubeEnv(DrakeGymEnv):
 
         self.diagram = builder.Build()
         self.diagram.set_name("Diagram")
+
         simulator = Simulator(self.diagram)
         if self.render_mode == "human":
             simulator.set_target_realtime_rate(1.0)

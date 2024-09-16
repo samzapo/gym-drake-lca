@@ -4,6 +4,7 @@ import logging
 import matplotlib.pyplot as plt
 import pydrake
 
+from gym_drake_lca import ASSETS_PATH
 from gym_drake_lca.envs.lift_cube_env import LiftCubeEnv
 
 
@@ -18,9 +19,17 @@ def main():
     logging.getLogger().setLevel(logging.INFO)
     pydrake.common.configure_logging()
 
+    parameters = {
+        "manipulands": [
+            f"{ASSETS_PATH}/blue_cube.sdf",
+        ],
+    }
     # Create the environment
     env = LiftCubeEnv(
-        observation_mode=args.observation_mode, action_mode=args.action_mode, render_mode=args.render_mode
+        observation_mode=args.observation_mode,
+        action_mode=args.action_mode,
+        render_mode=args.render_mode,
+        parameters=parameters,
     )
 
     # Reset the environment

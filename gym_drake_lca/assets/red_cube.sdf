@@ -1,0 +1,46 @@
+<?xml version="1.0"?>
+<sdf version="1.7">
+  <model name="cube">
+    <link name="cube">
+      <pose>0.1 0.1 0.01 0 0 0</pose>
+      <inertial>
+        <mass>0.1</mass>
+        <inertia>
+          <ixx>0.00001125</ixx>
+          <ixy>0</ixy>
+          <ixz>0</ixz>
+          <iyy>0.00001125</iyy>
+          <iyz>0</iyz>
+          <izz>0.00001125</izz>
+        </inertia>
+      </inertial>
+      <visual name="cube_visual">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.015 0.015 0.015</size>
+          </box>
+        </geometry>
+        <material>
+          <diffuse>1 0 0 1</diffuse>
+        </material>
+      </visual>
+      <collision name="cube_collision">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.015 0.015 0.015</size>
+          </box>
+        </geometry>
+        <drake:proximity_properties>
+          <drake:compliant_hydroelastic/>
+          <drake:hydroelastic_modulus> 1.0e7 </drake:hydroelastic_modulus>
+          <drake:mesh_resolution_hint> 0.01 </drake:mesh_resolution_hint>
+          <drake:mu_dynamic> 0.5 </drake:mu_dynamic>
+          <drake:mu_static> 0.5 </drake:mu_static>
+          <drake:hunt_crossley_dissipation> 3.0 </drake:hunt_crossley_dissipation>
+        </drake:proximity_properties>
+      </collision>
+    </link>
+  </model>
+</sdf>

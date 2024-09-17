@@ -22,7 +22,7 @@
           </box>
         </geometry>
         <material>
-          <diffuse>0.5 0 0 1</diffuse>
+          <diffuse>1 0 0 1</diffuse>
         </material>
       </visual>
       <collision name="cube_collision">

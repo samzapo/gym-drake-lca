@@ -14,11 +14,11 @@ from gym_drake_lca import ASSETS_PATH
 from .drake_lca_env import DrakeLcaEnv
 
 
-class LiftCubeEnv(DrakeLcaEnv):
+class PickPlaceCubeEnv(DrakeLcaEnv):
     """
     ## Description
 
-    The robot has to lift a cube with its end-effector.
+    The robot has to pick and place a cube with its end-effector.
 
     ## Action space
 
@@ -42,7 +42,7 @@ class LiftCubeEnv(DrakeLcaEnv):
     | 0     | X             | Float (m)   | -1.0 | 1.0 |
     | 1     | Y             | Float (m)   | -1.0 | 1.0 |
     | 2     | Z             | Float (m)   | -1.0 | 1.0 |
-    | 3     | Gripper joint | Float (rad) | -1.0 | 1.0 |
+    | 5     | Gripper joint | Float (rad) | -1.0 | 1.0 |
 
     ## Observation space
 
@@ -50,6 +50,7 @@ class LiftCubeEnv(DrakeLcaEnv):
 
     - `"arm_qpos"`: the joint angles of the robot arm in radians, shape (6,)
     - `"arm_qvel"`: the joint velocities of the robot arm in radians per second, shape (6,)
+    - `"target_pos"`: the position of the target, as (x, y, z)
     - `"image_front"`: the front image of the camera of size (240, 320, 3)
     - `"image_top"`: the top image of the camera of size (240, 320, 3)
     - `"cube_pos"`: the position of the cube, as (x, y, z)
@@ -60,23 +61,21 @@ class LiftCubeEnv(DrakeLcaEnv):
     | --------------- | --------- | --------- | -------- |
     | `"arm_qpos"`    | ✓         | ✓         | ✓        |
     | `"arm_qvel"`    | ✓         | ✓         | ✓        |
+    | `"target_pos"`  | ✓         | ✓         | ✓        |
     | `"image_front"` | ✓         |           | ✓        |
     | `"image_top"`   | ✓         |           | ✓        |
     | `"cube_pos"`    |           | ✓         | ✓        |
 
     ## Reward
 
-    The reward is the sum of the following terms:
-        - the height of the cube above the threshold.
-        - the negative distance between the end effector and the cube.
-
+    The reward is the negative distance between the cube and the target position.
 
     ## Arguments
 
     - `observation_mode (str)`: the observation mode, can be "image", "state", or "both", default is "image", see
         section "Observation space".
     - `action_mode (str)`: the action mode, can be "joint" or "ee", default is "joint", see section "Action space".
-    - `render_mode (str)`: the render mode, can be "human" or "rgb_array", default is "human".
+    - `render_mode (str)`: the render mode, can be "human" or "rgb_array", default is None.
     """
 
     def __init__(
@@ -92,10 +91,13 @@ class LiftCubeEnv(DrakeLcaEnv):
             cube_file_path = f"{ASSETS_PATH}/red_cube.sdf"
 
         self.cube_file_path = cube_file_path
+        self.target_file_path = f"{ASSETS_PATH}/target.sdf"
 
-        self.threshold_height = 0.5
+        # Set additional utils
         self.cube_low = np.array([-0.15, 0.10, 0.015])
         self.cube_high = np.array([0.15, 0.25, 0.015])
+        self.target_low = np.array([-0.15, 0.10, 0.015])
+        self.target_high = np.array([0.15, 0.25, 0.035])
 
         super().__init__(
             observation_mode=observation_mode,
@@ -110,23 +112,22 @@ class LiftCubeEnv(DrakeLcaEnv):
     def add_objects_to_plant(self, plant: MultibodyPlant):
         parser = Parser(plant=plant)
         parser.AddModels(self.cube_file_path)
+        parser.AddModels(self.target_file_path)
 
     def calc_reward(self, plant: MultibodyPlant, plant_context: Context) -> np.float64:
-        assert self.threshold_height >= 0.0
-
-        gripper_moving_side = plant.GetBodyByName("gripper_moving_part")
         cube = plant.GetBodyByName("cube")
+        target = plant.GetBodyByName("target")
 
         # Get the position of the cube and the distance between the end effector and the cube
         cube_pos = cube.EvalPoseInWorld(plant_context).translation()
-        cube_z = cube_pos[2]
-        ee_pos = gripper_moving_side.EvalPoseInWorld(plant_context).translation()
-        ee_to_cube = np.linalg.norm(ee_pos - cube_pos)
+        target_pos = target.EvalPoseInWorld(plant_context).translation()
+
+        # Get the position of the cube and the distance between the end effector and the cube
+        cube_to_target = np.linalg.norm(cube_pos - target_pos)
 
         # Compute the reward
-        reward_height = cube_z - self.threshold_height
-        reward_distance = -ee_to_cube
-        reward = reward_height + reward_distance
+        reward = -cube_to_target
+
         return reward
 
     def add_state_observations(self, plant, plant_context, observations):
@@ -135,6 +136,10 @@ class LiftCubeEnv(DrakeLcaEnv):
         observations["cube_pos"] = cube_pos
 
     def handle_plant_state_reset(self, plant: MultibodyPlant, plant_context: Context):
+        # Sample the target position
+        target_pos = np.random.uniform(self.target_low, self.target_high)
+        target_rot = RotationMatrix.MakeZRotation(np.random.uniform(0, 2 * np.pi))
+
         # Randomize a new cube position.
         cube_pos = np.random.uniform(low=self.cube_low, high=self.cube_high)
         cube_rot = RotationMatrix.MakeZRotation(np.random.uniform(0, 2 * np.pi))
@@ -142,3 +147,7 @@ class LiftCubeEnv(DrakeLcaEnv):
         # Set the new cube position in the context.
         cube = plant.GetBodyByName("cube")
         plant.SetFreeBodyPose(plant_context, cube, RigidTransform(cube_rot, cube_pos))
+
+        target = plant.GetBodyByName("target")
+        plant.SetFreeBodyPose(plant_context, target, RigidTransform(target_rot, target_pos))
+        target.Lock(plant_context)

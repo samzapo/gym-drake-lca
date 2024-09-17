@@ -19,17 +19,13 @@ def main():
     logging.getLogger().setLevel(logging.INFO)
     pydrake.common.configure_logging()
 
-    parameters = {
-        "manipulands": [
-            f"{ASSETS_PATH}/blue_cube.sdf",
-        ],
-    }
     # Create the environment
     env = LiftCubeEnv(
         observation_mode=args.observation_mode,
         action_mode=args.action_mode,
         render_mode=args.render_mode,
-        parameters=parameters,
+        parameters={},
+        cube_file_path=f"{ASSETS_PATH}/blue_cube.sdf",
     )
 
     # Reset the environment

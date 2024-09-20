@@ -93,7 +93,6 @@ class LiftCubeEnv(DrakeLcaEnv):
 
         self.cube_file_path = cube_file_path
 
-        self.threshold_height = 0.5
         self.cube_low = np.array([-0.15, 0.10, 0.0075])
         self.cube_high = np.array([0.15, 0.25, 0.0075])
 
@@ -122,14 +121,11 @@ class LiftCubeEnv(DrakeLcaEnv):
 
         # Get the position of the cube and the distance between the end effector and the cube
         cube_pos = cube.EvalPoseInWorld(plant_context).translation()
-        cube_z = cube_pos[2]
         ee_pos = gripper_moving_side.EvalPoseInWorld(plant_context).translation()
         ee_to_cube = np.linalg.norm(ee_pos - cube_pos)
 
         # Compute the reward
-        reward_height = cube_z - self.threshold_height
-        reward_distance = -ee_to_cube
-        reward = reward_height + reward_distance
+        reward = -ee_to_cube
         return reward
 
     def add_state_observations(self, plant, plant_context, observations):

@@ -94,9 +94,9 @@ class PickPlaceCubeEnv(DrakeLcaEnv):
         self.target_file_path = f"{ASSETS_PATH}/target.sdf"
 
         # Set additional utils
-        self.cube_low = np.array([-0.15, 0.10, 0.015])
-        self.cube_high = np.array([0.15, 0.25, 0.015])
-        self.target_low = np.array([-0.15, 0.10, 0.015])
+        self.cube_low = np.array([-0.15, 0.10, 0.0075])
+        self.cube_high = np.array([0.15, 0.25, 0.0075])
+        self.target_low = np.array([-0.15, 0.10, 0.0075])
         self.target_high = np.array([0.15, 0.25, 0.035])
 
         super().__init__(
@@ -111,11 +111,15 @@ class PickPlaceCubeEnv(DrakeLcaEnv):
 
     def add_objects_to_plant(self, plant: MultibodyPlant):
         parser = Parser(plant=plant)
-        parser.AddModels(self.cube_file_path)
+        model_instance = parser.AddModels(self.cube_file_path)
+        bodies = plant.GetBodyIndices(model_instance)
+        assert len(bodies) == 1
+        self.cube_body_index = bodies[0]
+
         parser.AddModels(self.target_file_path)
 
     def calc_reward(self, plant: MultibodyPlant, plant_context: Context) -> np.float64:
-        cube = plant.GetBodyByName("cube")
+        cube = plant.get_body(self.cube_body_index)
         target = plant.GetBodyByName("target")
 
         # Get the position of the cube and the distance between the end effector and the cube
@@ -131,7 +135,7 @@ class PickPlaceCubeEnv(DrakeLcaEnv):
         return reward
 
     def add_state_observations(self, plant, plant_context, observations):
-        cube = plant.GetBodyByName("cube")
+        cube = plant.get_body(self.cube_body_index)
         cube_pos = cube.EvalPoseInWorld(plant_context).translation()
         observations["cube_pos"] = cube_pos
 
@@ -145,9 +149,34 @@ class PickPlaceCubeEnv(DrakeLcaEnv):
         cube_rot = RotationMatrix.MakeZRotation(np.random.uniform(0, 2 * np.pi))
 
         # Set the new cube position in the context.
-        cube = plant.GetBodyByName("cube")
+        cube = plant.get_body(self.cube_body_index)
         plant.SetFreeBodyPose(plant_context, cube, RigidTransform(cube_rot, cube_pos))
 
         target = plant.GetBodyByName("target")
         plant.SetFreeBodyPose(plant_context, target, RigidTransform(target_rot, target_pos))
         target.Lock(plant_context)
+
+
+class PushCubeEnv(PickPlaceCubeEnv):
+    """
+    NOTE: Same as PickPlaceCubeEnv, except all targets lie on the plane so the cube may be pushed.
+    """
+
+    def __init__(
+        self,
+        *,
+        observation_mode="state",
+        action_mode="joint",
+        render_mode="rgb_array",
+        parameters: dict | None = None,
+        cube_file_path: str | None = None,
+    ):
+        PickPlaceCubeEnv.__init__(
+            observation_mode=observation_mode,
+            action_mode=action_mode,
+            render_mode=render_mode,
+            parameters=parameters,
+            cube_file_path=cube_file_path,
+        )
+        self.target_low = np.array([-0.15, 0.10, 0.0075])
+        self.target_high = np.array([0.15, 0.25, 0.0075])

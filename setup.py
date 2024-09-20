@@ -10,7 +10,7 @@ def readme():
 
 setup(
     name="gym-drake-lca",
-    version="0.0.5",
+    version="0.0.6",
     description="A Gym implementation of the Low Cost Arm in Drake",
     long_description=readme(),
     long_description_content_type="text/plain",

@@ -2,7 +2,7 @@ import os
 
 from gymnasium.envs.registration import register
 
-__version__ = "0.0.6"
+__version__ = "0.0.7"
 
 ASSETS_PATH = os.path.join(os.path.dirname(__file__), "assets")
 

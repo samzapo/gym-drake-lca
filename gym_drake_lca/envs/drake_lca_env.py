@@ -1,7 +1,6 @@
 from contextlib import suppress
 
 import gymnasium as gym
-import matplotlib.pyplot as plt
 import numpy as np
 from pydrake.common.value import (
     Value,
@@ -37,7 +36,6 @@ from pydrake.systems.analysis import Simulator
 from pydrake.systems.controllers import (
     PidController,
 )
-from pydrake.systems.drawing import plot_graphviz, plot_system_graphviz
 from pydrake.systems.framework import (
     Context,
     DiagramBuilder,
@@ -62,7 +60,7 @@ from gym_drake_lca import ASSETS_PATH
 
 
 def add_robot(plant, parser):
-    (robot_model_instance,) = parser.AddModels(f"{ASSETS_PATH}/low-cost-arm.urdf")
+    (robot_model_instance,) = parser.AddModels(f"{ASSETS_PATH}/follower_arm.sdf")
 
     identity = RigidTransform.Identity()
     plant.WeldFrames(plant.world_frame(), plant.GetFrameByName("base_link", robot_model_instance), identity)
@@ -217,18 +215,17 @@ def construct_lift_cube_env_default_params():
         },
         "observation_cameras": ["image_front", "image_top"],
         "rgb_array_camera": "image_viewer",
-        "sim_time_step": 0.0,
-        "gym_time_step": 0.1,
+        "sim_time_step": 0.001,
+        "gym_time_step": 0.05,
         "gym_time_limit": np.inf,
-        # contact_models: 'point', 'hydroelastic_with_fallback'
+        # contact_models: 'hydroelastic', 'point', 'hydroelastic_with_fallback'
         "contact_model": "hydroelastic_with_fallback",
         # contact_approximations: 'sap', 'tamsi', 'similar', 'lagged'
-        "contact_approximation": "sap",
-        "pid_gains": {"kp": 1.0, "ki": 0.0, "kd": 0.1},
+        "contact_approximation": "tamsi",
+        "pid_gains": {"kp": 0.5, "ki": 0.0, "kd": 0.01},
         "lift_reward_threshold_height": 0.5,
         "obs_state_noise_magnitude": 0.0,
         "external_force_disturbances": {"magnitude": 0.0, "period": 1.0, "duration": 0.1},
-        "emit_debug_printout": False,
         "ik_time_step": 0.001,
         "ik_velocity_limit_factor": 1.0,
         "joint_max_velocities": 10.0,
@@ -351,9 +348,7 @@ class DrakeLcaEnv(DrakeGymEnv):
         self.render_mode = render_mode
 
         # Make simulation.
-        simulator = self.construct_simulator(
-            debug=self.parameters["emit_debug_printout"],
-        )
+        simulator = self.construct_simulator()
 
         super().__init__(
             simulator=simulator,
@@ -392,7 +387,7 @@ class DrakeLcaEnv(DrakeGymEnv):
 
     def construct_action_space(self):
         if self.action_mode == "joint":
-            action_shape = 5
+            action_shape = 6
             return gym.spaces.Box(low=-np.pi, high=np.pi, shape=(action_shape,), dtype=np.float32)
         elif self.action_mode == "ee":
             action_shape = 4
@@ -439,7 +434,7 @@ class DrakeLcaEnv(DrakeGymEnv):
         )
         self.add_objects_to_plant(plant)
 
-    def construct_simulator(self, *, debug: bool):
+    def construct_simulator(self):
         builder = DiagramBuilder()
 
         multibody_plant_config = MultibodyPlantConfig(
@@ -738,7 +733,7 @@ class DrakeLcaEnv(DrakeGymEnv):
                 forces_cls = Value[list[ExternallyAppliedSpatialForce_[float]]]
                 self.DeclareAbstractOutputPort("spatial_forces", lambda: forces_cls(), self.calc_disturbances)
                 self.plant = plant
-                self.gripper_body = self.plant.GetBodyByName("gripper_moving_part")
+                self.gripper_body = self.plant.GetBodyByName("thumb")
                 self.force_mag = force_mag
                 assert period > duration, "period: {} must be larger than duration: {}".format(
                     period, duration
@@ -787,60 +782,40 @@ class DrakeLcaEnv(DrakeGymEnv):
 
         simulator = Simulator(self.diagram)
         if self.render_mode == "human":
-            simulator.set_target_realtime_rate(1.0)
+            simulator.set_target_realtime_rate(2.0)
         simulator.Initialize()
 
-        if debug:
+        def monitor(context, gym_time_limit=self.parameters["gym_time_limit"]):
+            # Truncation: the episode duration reaches the time limit.
+            if context.get_time() > gym_time_limit:
+                return EventStatus.ReachedTermination(self.diagram, "time limit")
 
-            def monitor(context, gym_time_limit=self.parameters["gym_time_limit"]):
-                # Truncation: the episode duration reaches the time limit.
-                if context.get_time() > gym_time_limit:
-                    if debug:
-                        print("Episode reached time limit.")
-                    return EventStatus.ReachedTermination(self.diagram, "time limit")
+            # TODO: Add penetration depth with self or environment as a penalty to the reward calculation.
+            # Terminate if the robot is buried in the environment.
+            max_depth = 0.01  # 1 cm
 
-                # TODO: Add penetration depth with self or environment as a penalty to the reward calculation.
-                # Terminate if the robot is buried in the environment.
-                max_depth = 0.01  # 1 cm
+            # Get the plant context.
+            plant = self.diagram.GetSubsystemByName("plant")
+            plant_context = self.diagram.GetMutableSubsystemContext(plant, context)
 
-                # Get the plant context.
-                plant = self.diagram.GetSubsystemByName("plant")
-                plant_context = self.diagram.GetMutableSubsystemContext(plant, context)
+            contact_results = plant.get_contact_results_output_port().Eval(plant_context)
 
-                contact_results = plant.get_contact_results_output_port().Eval(plant_context)
+            # robot-ground contact is rigid.
+            for i in range(contact_results.num_point_pair_contacts()):
+                depth = contact_results.point_pair_contact_info(i).point_pair().depth
 
-                # robot-ground contact is rigid.
-                for i in range(contact_results.num_point_pair_contacts()):
-                    depth = contact_results.point_pair_contact_info(i).point_pair().depth
+                if depth > max_depth:
+                    return EventStatus.ReachedTermination(self.diagram, "Excessive Contact with Environment.")
+            return EventStatus.Succeeded()
 
-                    if depth > max_depth:
-                        if debug:
-                            print("Excessive Contact with Environment.")
-                        return EventStatus.ReachedTermination(
-                            self.diagram, "Excessive Contact with Environment."
-                        )
-                return EventStatus.Succeeded()
-
-            simulator.set_monitor(monitor)
-
-        if debug:
-            # Visualize the controller plant and diagram.
-            plt.figure()
-            plot_graphviz(plant.GetTopologyGraphvizString())
-            plt.figure()
-            plot_system_graphviz(self.diagram, max_depth=2)
-            plt.plot(1)
-            plt.show(block=False)
+        simulator.set_monitor(monitor)
 
         return simulator
 
     def handle_reset(self, simulator, diagram_context, seed):
         # Reset the Diagram context to default.
         self.diagram = simulator.get_system()
-        # self.diagram.SetDefaultContext(diagram_context)
-
-        # Set the seed.
-        np.random.seed(seed)
+        self.diagram.SetDefaultContext(diagram_context)
 
         # Get the plant context.
         plant = self.diagram.GetSubsystemByName("plant")

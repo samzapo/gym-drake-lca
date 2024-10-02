@@ -94,8 +94,8 @@ class LiftCubeEnv(DrakeLcaEnv):
         self.cube_file_path = cube_file_path
 
         self.threshold_height = 0.5
-        self.cube_low = np.array([-0.15, 0.10, 0.015])
-        self.cube_high = np.array([0.15, 0.25, 0.015])
+        self.cube_low = np.array([-0.15, 0.10, 0.0075])
+        self.cube_high = np.array([0.15, 0.25, 0.0075])
 
         super().__init__(
             observation_mode=observation_mode,
@@ -109,13 +109,17 @@ class LiftCubeEnv(DrakeLcaEnv):
 
     def add_objects_to_plant(self, plant: MultibodyPlant):
         parser = Parser(plant=plant)
-        parser.AddModels(self.cube_file_path)
+        model_instances = parser.AddModels(self.cube_file_path)
+        assert len(model_instances) == 1
+        bodies = plant.GetBodyIndices(model_instances[0])
+        assert len(bodies) == 1
+        self.cube_body_index = bodies[0]
 
     def calc_reward(self, plant: MultibodyPlant, plant_context: Context) -> np.float64:
         assert self.threshold_height >= 0.0
 
-        gripper_moving_side = plant.GetBodyByName("gripper_moving_part")
-        cube = plant.GetBodyByName("cube")
+        gripper_moving_side = plant.GetBodyByName("thumb")
+        cube = plant.get_body(self.cube_body_index)
 
         # Get the position of the cube and the distance between the end effector and the cube
         cube_pos = cube.EvalPoseInWorld(plant_context).translation()
@@ -130,7 +134,7 @@ class LiftCubeEnv(DrakeLcaEnv):
         return reward
 
     def add_state_observations(self, plant, plant_context, observations):
-        cube = plant.GetBodyByName("cube")
+        cube = plant.get_body(self.cube_body_index)
         cube_pos = cube.EvalPoseInWorld(plant_context).translation()
         observations["cube_pos"] = cube_pos
 
@@ -140,5 +144,5 @@ class LiftCubeEnv(DrakeLcaEnv):
         cube_rot = RotationMatrix.MakeZRotation(np.random.uniform(0, 2 * np.pi))
 
         # Set the new cube position in the context.
-        cube = plant.GetBodyByName("cube")
+        cube = plant.get_body(self.cube_body_index)
         plant.SetFreeBodyPose(plant_context, cube, RigidTransform(cube_rot, cube_pos))

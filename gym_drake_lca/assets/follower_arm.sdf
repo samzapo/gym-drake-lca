@@ -1,0 +1,316 @@
+<?xml version="1.0"?>
+<sdf version="1.7">
+  <model name="follower">
+    <link name="base_link">
+      <pose>0 0 0 0 0 0</pose>
+      <inertial>
+        <mass>0.1</mass>
+        <inertia>
+          <ixx>1e-5</ixx>
+          <ixy>0</ixy>
+          <ixz>0</ixz>
+          <iyy>1e-5</iyy>
+          <iyz>0</iyz>
+          <izz>1e-5</izz>
+        </inertia>
+      </inertial>
+      <visual name="base_link_visual">
+        <pose>0 0 0 1.5708 0 0</pose>
+        <geometry>
+          <mesh>
+            <uri>follower_meshes/base_link_collision.obj</uri>
+            <scale>1.0 1.0 1.0</scale>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>1 1 1 1</diffuse>
+        </material>
+      </visual>
+      <collision name="base_link_collision">
+        <pose>0 0 0 1.5708 0 0</pose>
+        <geometry>
+          <mesh>
+            <uri>follower_meshes/base_link_collision.obj</uri>
+            <scale>1.0 1.0 1.0</scale>
+          </mesh>
+        </geometry>
+      </collision>
+    </link>
+
+    <joint name="joint_1" type="revolute">
+      <parent>base_link</parent>
+      <child>shoulder</child>
+      <pose relative_to="shoulder">0 0 0 0 0 0</pose>
+      <axis>
+        <xyz>0 0 -1</xyz>
+      </axis>
+    </joint>
+
+    <link name="shoulder">
+      <pose relative_to="base_link">0.012 0 0.0409 0 0 0</pose>
+      <inertial>
+        <pose>0.011924 -0.00048792 0.013381 3.1415 1.5708 0</pose>
+        <mass>0.05014</mass>
+        <inertia>
+          <ixx>1.44921e-05</ixx>
+          <ixy>0</ixy>
+          <ixz>0</ixz>
+          <iyy>1.2371e-05</iyy>
+          <iyz>0</iyz>
+          <izz>7.59138e-06</izz>
+        </inertia>
+      </inertial>
+      <visual name="shoulder_visual">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <uri>follower_meshes/link_1_collision.obj</uri>
+            <scale>1.0 1.0 1.0</scale>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>1 1 1 1</diffuse>
+        </material>
+      </visual>
+      <collision name="shoulder_collision">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <uri>follower_meshes/link_1_collision.obj</uri>
+            <scale>1.0 1.0 1.0</scale>
+          </mesh>
+        </geometry>
+      </collision>
+    </link>
+
+    <joint name="joint_2" type="revolute">
+      <parent>shoulder</parent>
+      <child>upper_arm</child>
+      <pose relative_to="upper_arm">0 0 0 0 0 0</pose>
+      <axis>
+        <xyz>0 1 0</xyz>
+      </axis>
+    </joint>
+
+    <link name="upper_arm">
+      <pose relative_to="shoulder">0 -0.0209 0.0154 0 0 0</pose>
+      <inertial>
+        <pose>0.0011747 0.02097 0.071547 0 0 0</pose>
+        <mass>0.050177</mass>
+        <inertia>
+          <ixx>3.73065e-05</ixx>
+          <ixy>0</ixy>
+          <ixz>0</ixz>
+          <iyy>3.3772e-05</iyy>
+          <iyz>0</iyz>
+          <izz>7.94901e-06</izz>
+        </inertia>
+      </inertial>
+      <visual name="upper_arm_visual">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <uri>follower_meshes/link_2_collision.obj</uri>
+            <scale>1.0 1.0 1.0</scale>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>1 1 1 1</diffuse>
+        </material>
+      </visual>
+      <collision name="upper_arm_collision">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <uri>follower_meshes/link_2_collision.obj</uri>
+            <scale>1.0 1.0 1.0</scale>
+          </mesh>
+        </geometry>
+      </collision>
+    </link>
+
+    <joint name="joint_3" type="revolute">
+      <parent>upper_arm</parent>
+      <child>forearm</child>
+      <pose relative_to="forearm">0 0 0 0 0 0</pose>
+      <axis>
+        <xyz>0 1 0</xyz>
+      </axis>
+    </joint>
+
+    <link name="forearm">
+      <pose relative_to="upper_arm">-0.0148 0.0065 0.1083 0 0 0</pose>
+      <inertial>
+        <pose>-0.05537 0.014505 0.0028659 3.1415 1.5708 0</pose>
+        <mass>0.06379</mass>
+        <inertia>
+          <ixx>2.45081e-05</ixx>
+          <ixy>0</ixy>
+          <ixz>0</ixz>
+          <iyy>2.2231e-05</iyy>
+          <iyz>0</iyz>
+          <izz>7.34061e-06</izz>
+        </inertia>
+      </inertial>
+      <visual name="forearm_visual">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <uri>follower_meshes/link_3_collision.obj</uri>
+            <scale>1.0 1.0 1.0</scale>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>1 1 1 1</diffuse>
+        </material>
+      </visual>
+      <collision name="forearm_collision">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <uri>follower_meshes/link_3_collision.obj</uri>
+            <scale>1.0 1.0 1.0</scale>
+          </mesh>
+        </geometry>
+      </collision>
+    </link>
+
+    <joint name="joint_4" type="revolute">
+      <parent>forearm</parent>
+      <child>wrist</child>
+      <pose relative_to="wrist">0 0 0 0 0 0</pose>
+      <axis>
+        <xyz>0 1 0</xyz>
+      </axis>
+    </joint>
+
+    <link name="wrist">
+      <pose relative_to="forearm">-0.10048 5e-05 0.0026999 0 0 0</pose>
+      <inertial>
+        <pose>-0.02652 0.019195 -9.0614e-06 1.5708 0 0</pose>
+        <mass>0.019805</mass>
+        <inertia>
+          <ixx>2.95813e-06</ixx>
+          <ixy>0</ixy>
+          <ixz>0</ixz>
+          <iyy>2.8759e-06</iyy>
+          <iyz>0</iyz>
+          <izz>1.07787e-06</izz>
+        </inertia>
+      </inertial>
+      <visual name="wrist_visual">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <uri>follower_meshes/link_4_collision.obj</uri>
+            <scale>1.0 1.0 1.0</scale>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>1 1 1 1</diffuse>
+        </material>
+      </visual>
+      <collision name="wrist_collision">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <uri>follower_meshes/link_4_collision.obj</uri>
+            <scale>1.0 1.0 1.0</scale>
+          </mesh>
+        </geometry>
+      </collision>
+    </link>
+
+    <joint name="joint_5" type="revolute">
+      <parent>wrist</parent>
+      <child>hand</child>
+      <pose relative_to="hand">0 0 0 0 0 0</pose>
+      <axis>
+        <xyz>1 0 0</xyz>
+      </axis>
+    </joint>
+
+    <link name="hand">
+      <pose relative_to="wrist">-0.045 0.013097 0 0 0 0</pose>
+      <inertial>
+        <pose>-0.019091 0.0053379 0.00018011 3.1415 1.5708 0</pose>
+        <mass>0.029277</mass>
+        <inertia>
+          <ixx>8.11303e-06</ixx>
+          <ixy>0</ixy>
+          <ixz>0</ixz>
+          <iyy>7.14908e-06</iyy>
+          <iyz>0</iyz>
+          <izz>3.27429e-06</izz>
+        </inertia>
+      </inertial>
+      <visual name="hand_visual">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <uri>follower_meshes/link_5_collision.obj</uri>
+            <scale>1.0 1.0 1.0</scale>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>1 1 1 1</diffuse>
+        </material>
+      </visual>
+      <collision name="hand_collision">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <uri>follower_meshes/link_5_collision.obj</uri>
+            <scale>1.0 1.0 1.0</scale>
+          </mesh>
+        </geometry>
+      </collision>
+    </link>
+
+    <joint name="joint_6" type="revolute">
+      <parent>hand</parent>
+      <child>thumb</child>
+      <pose relative_to="thumb">0 0 0 0 0 0</pose>
+      <axis>
+        <xyz>0 0 -1</xyz>
+      </axis>
+    </joint>
+
+    <link name="thumb">
+      <pose relative_to="hand">-0.01315 -0.0075 0.0145 0 0 0</pose>
+      <inertial>
+        <pose>-0.02507 0.0010817 -0.01414 1.5708 1.5708 0</pose>
+        <mass>0.012831</mass>
+        <inertia>
+          <ixx>3.49922e-06</ixx>
+          <ixy>0</ixy>
+          <ixz>0</ixz>
+          <iyy>2.45768e-06</iyy>
+          <iyz>0</iyz>
+          <izz>1.4645e-06</izz>
+        </inertia>
+      </inertial>
+      <visual name="thumb_visual">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <uri>follower_meshes/link_6_collision.obj</uri>
+            <scale>1.0 1.0 1.0</scale>
+          </mesh>
+        </geometry>
+        <material>
+          <diffuse>1 1 1 1</diffuse>
+        </material>
+      </visual>
+      <collision name="thumb_collision">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <uri>follower_meshes/link_6_collision.obj</uri>
+            <scale>1.0 1.0 1.0</scale>
+          </mesh>
+        </geometry>
+      </collision>
+    </link>
+  </model>
+</sdf>

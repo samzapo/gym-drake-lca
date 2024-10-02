@@ -116,7 +116,7 @@ class LiftCubeEnv(DrakeLcaEnv):
     def calc_reward(self, plant: MultibodyPlant, plant_context: Context) -> np.float64:
         assert self.threshold_height >= 0.0
 
-        gripper_moving_side = plant.GetBodyByName("gripper_moving_part")
+        gripper_moving_side = plant.GetBodyByName("thumb")
         cube = plant.get_body(self.cube_body_index)
 
         # Get the position of the cube and the distance between the end effector and the cube

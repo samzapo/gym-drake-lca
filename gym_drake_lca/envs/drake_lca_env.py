@@ -60,7 +60,7 @@ from gym_drake_lca import ASSETS_PATH
 
 
 def add_robot(plant, parser):
-    (robot_model_instance,) = parser.AddModels(f"{ASSETS_PATH}/low-cost-arm.urdf")
+    (robot_model_instance,) = parser.AddModels(f"{ASSETS_PATH}/follower_arm.sdf")
 
     identity = RigidTransform.Identity()
     plant.WeldFrames(plant.world_frame(), plant.GetFrameByName("base_link", robot_model_instance), identity)
@@ -387,7 +387,7 @@ class DrakeLcaEnv(DrakeGymEnv):
 
     def construct_action_space(self):
         if self.action_mode == "joint":
-            action_shape = 5
+            action_shape = 6
             return gym.spaces.Box(low=-np.pi, high=np.pi, shape=(action_shape,), dtype=np.float32)
         elif self.action_mode == "ee":
             action_shape = 4
@@ -733,7 +733,7 @@ class DrakeLcaEnv(DrakeGymEnv):
                 forces_cls = Value[list[ExternallyAppliedSpatialForce_[float]]]
                 self.DeclareAbstractOutputPort("spatial_forces", lambda: forces_cls(), self.calc_disturbances)
                 self.plant = plant
-                self.gripper_body = self.plant.GetBodyByName("gripper_moving_part")
+                self.gripper_body = self.plant.GetBodyByName("thumb")
                 self.force_mag = force_mag
                 assert period > duration, "period: {} must be larger than duration: {}".format(
                     period, duration

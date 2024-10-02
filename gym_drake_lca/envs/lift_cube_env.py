@@ -109,15 +109,16 @@ class LiftCubeEnv(DrakeLcaEnv):
 
     def add_objects_to_plant(self, plant: MultibodyPlant):
         parser = Parser(plant=plant)
-        model_instance = parser.AddModels(self.cube_file_path)
-        bodies = plant.GetBodyIndices(model_instance)
+        model_instances = parser.AddModels(self.cube_file_path)
+        assert len(model_instances) == 1
+        bodies = plant.GetBodyIndices(model_instances[0])
         assert len(bodies) == 1
         self.cube_body_index = bodies[0]
 
     def calc_reward(self, plant: MultibodyPlant, plant_context: Context) -> np.float64:
         assert self.threshold_height >= 0.0
 
-        gripper_moving_side = plant.GetBodyByName("gripper_moving_part")
+        gripper_moving_side = plant.GetBodyByName("thumb")
         cube = plant.get_body(self.cube_body_index)
 
         # Get the position of the cube and the distance between the end effector and the cube

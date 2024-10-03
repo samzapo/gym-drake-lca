@@ -34,7 +34,7 @@ from pydrake.multibody.tree import (
 )
 from pydrake.systems.analysis import Simulator
 from pydrake.systems.controllers import (
-    PidController,
+    InverseDynamicsController,
 )
 from pydrake.systems.framework import (
     Context,
@@ -58,11 +58,13 @@ from pydrake.visualization import (
 
 from gym_drake_lca import ASSETS_PATH
 
+gravity_vector = np.array([0.0, 0.0, -9.81])
+
 
 def add_robot(plant, parser):
     (robot_model_instance,) = parser.AddModels(f"{ASSETS_PATH}/follower_arm.sdf")
 
-    identity = RigidTransform.Identity()
+    identity = RigidTransform(RotationMatrix.MakeZRotation(-np.pi / 2.0))
     plant.WeldFrames(plant.world_frame(), plant.GetFrameByName("base_link", robot_model_instance), identity)
     return robot_model_instance
 
@@ -72,6 +74,9 @@ def construct_robot_plant(time_step):
     robot_plant = MultibodyPlant(time_step)
     parser = Parser(plant=robot_plant)
     add_robot(robot_plant, parser)
+
+    robot_plant.mutable_gravity_field().set_gravity_vector(gravity_vector)
+
     robot_plant.Finalize()
     return robot_plant
 
@@ -92,7 +97,7 @@ class DifferentialIKIntegrator(LeafSystem):
         ).get_index()  # [x, y, z, gripper]
 
         # TODO: Move to parameters.
-        self.end_effector = self.plant.GetBodyByName("gripper_static_part")
+        self.end_effector = self.plant.GetBodyByName("thumb")
         self.p_BoBi_B = np.array([0, 0.05, 0])
 
         assert self.thumb_joint.num_velocities() == 1
@@ -120,7 +125,7 @@ class DifferentialIKIntegrator(LeafSystem):
     def construct_robot_ik_plant_and_context(self):
         # Construct Robot-only Plant
         self.plant = construct_robot_plant(0)
-        self.thumb_joint = self.plant.GetJointByName("joint_7")
+        self.thumb_joint = self.plant.GetJointByName("joint_6")
 
         self.plant_context = self.plant.CreateDefaultContext()
         # Lock thumb in place (exclude from jacobian).
@@ -222,7 +227,7 @@ def construct_lift_cube_env_default_params():
         "contact_model": "hydroelastic_with_fallback",
         # contact_approximations: 'sap', 'tamsi', 'similar', 'lagged'
         "contact_approximation": "tamsi",
-        "pid_gains": {"kp": 0.5, "ki": 0.0, "kd": 0.01},
+        "pid_gains": {"kp": 500.0, "ki": 0.0, "kd": 20.0},
         "lift_reward_threshold_height": 0.5,
         "obs_state_noise_magnitude": 0.0,
         "external_force_disturbances": {"magnitude": 0.0, "period": 1.0, "duration": 0.1},
@@ -447,7 +452,6 @@ class DrakeLcaEnv(DrakeGymEnv):
         plant, scene_graph = AddMultibodyPlant(multibody_plant_config, builder)
         plant.set_name("plant")
 
-        gravity_vector = np.array([0.0, 0.0, -9.81])
         plant.mutable_gravity_field().set_gravity_vector(gravity_vector)
 
         robot_model_instance = self.add_models_to_plant(plant)
@@ -469,17 +473,27 @@ class DrakeLcaEnv(DrakeGymEnv):
         kp = np.ones(nq) * gains["kp"]
         ki = np.ones(nq) * gains["ki"]
         kd = np.ones(nv) * gains["kd"]
-        pid_controller = builder.AddSystem(PidController(kp=kp, ki=ki, kd=kd))
-        pid_controller.set_name("pid_controller")
+        self.idyn_plant = construct_robot_plant(0)
+        idyn_controller = builder.AddSystem(
+            InverseDynamicsController(
+                robot=self.idyn_plant,
+                kp=kp,
+                ki=ki,
+                kd=kd,
+                has_reference_acceleration=False,
+                plant_context=self.idyn_plant.CreateDefaultContext(),
+            )
+        )
+        idyn_controller.set_name("idyn_controller")
 
         builder.Connect(
             # [q v] all current states
             plant.get_state_output_port(robot_model_instance),
-            pid_controller.get_input_port_estimated_state(),
+            idyn_controller.get_input_port_estimated_state(),
         )
 
         builder.Connect(
-            pid_controller.get_output_port(),  # [u] actuation
+            idyn_controller.get_output_port_control(),  # [u] actuation
             plant.get_actuation_input_port(robot_model_instance),
         )
 
@@ -509,7 +523,7 @@ class DrakeLcaEnv(DrakeGymEnv):
 
             builder.Connect(
                 differential_ik_integrator.get_output_port(0),  # [q v] desired state
-                pid_controller.get_input_port_desired_state(),
+                idyn_controller.get_input_port_desired_state(),
             )
 
             builder.Connect(
@@ -535,7 +549,7 @@ class DrakeLcaEnv(DrakeGymEnv):
 
             builder.Connect(
                 state_mux.get_output_port(0),  # [q v] desired state
-                pid_controller.get_input_port_desired_state(),
+                idyn_controller.get_input_port_desired_state(),
             )
 
         #########################################################################

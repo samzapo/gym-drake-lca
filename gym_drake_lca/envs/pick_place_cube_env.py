@@ -111,7 +111,7 @@ class PickPlaceCubeEnv(DrakeLcaEnv):
 
     def add_objects_to_plant(self, plant: MultibodyPlant):
         parser = Parser(plant=plant)
-        model_instance = parser.AddModels(self.cube_file_path)
+        model_instance = parser.AddModels(self.cube_file_path.format(ASSETS_PATH=ASSETS_PATH))
         assert len(model_instance) == 1
         bodies = plant.GetBodyIndices(model_instance[0])
         assert len(bodies) == 1
@@ -173,6 +173,7 @@ class PushCubeEnv(PickPlaceCubeEnv):
         cube_file_path: str | None = None,
     ):
         PickPlaceCubeEnv.__init__(
+            self,
             observation_mode=observation_mode,
             action_mode=action_mode,
             render_mode=render_mode,

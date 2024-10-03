@@ -109,7 +109,7 @@ class LiftCubeEnv(DrakeLcaEnv):
 
     def add_objects_to_plant(self, plant: MultibodyPlant):
         parser = Parser(plant=plant)
-        model_instances = parser.AddModels(self.cube_file_path)
+        model_instances = parser.AddModels(self.cube_file_path.format(ASSETS_PATH=ASSETS_PATH))
         assert len(model_instances) == 1
         bodies = plant.GetBodyIndices(model_instances[0])
         assert len(bodies) == 1

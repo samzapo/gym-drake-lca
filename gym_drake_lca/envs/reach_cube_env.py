@@ -108,7 +108,7 @@ class ReachCubeEnv(DrakeLcaEnv):
 
     def add_objects_to_plant(self, plant: MultibodyPlant):
         parser = Parser(plant=plant)
-        model_instance = parser.AddModels(self.cube_file_path)
+        model_instance = parser.AddModels(self.cube_file_path.format(ASSETS_PATH=ASSETS_PATH))
         bodies = plant.GetBodyIndices(model_instance)
         assert len(bodies) == 1
         self.cube_body_index = bodies[0]

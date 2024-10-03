@@ -2,7 +2,7 @@ import os
 
 from gymnasium.envs.registration import register
 
-__version__ = "0.0.7"
+__version__ = "0.0.8"
 
 ASSETS_PATH = os.path.join(os.path.dirname(__file__), "assets")
 
@@ -15,5 +15,17 @@ register(
 register(
     id="PickPlaceCube-v0",
     entry_point="gym_drake_lca.envs:PickPlaceCubeEnv",
+    max_episode_steps=500,
+)
+
+register(
+    id="PushCube-v0",
+    entry_point="gym_drake_lca.envs:PushCubeEnv",
+    max_episode_steps=500,
+)
+
+register(
+    id="ReachCube-v0",
+    entry_point="gym_drake_lca.envs:ReachCubeEnv",
     max_episode_steps=500,
 )

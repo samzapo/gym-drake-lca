@@ -6,12 +6,12 @@
       <inertial>
         <mass>0.001</mass>
         <inertia>
-          <ixx>0.00001125</ixx>
+          <ixx>3.75e-08</ixx>
           <ixy>0</ixy>
           <ixz>0</ixz>
-          <iyy>0.00001125</iyy>
+          <iyy>3.75e-08</iyy>
           <iyz>0</iyz>
-          <izz>0.00001125</izz>
+          <izz>3.75e-08</izz>
         </inertia>
       </inertial>
       <visual name="cube_visual">
@@ -36,8 +36,8 @@
           <drake:compliant_hydroelastic/>
           <drake:hydroelastic_modulus> 1.0e7 </drake:hydroelastic_modulus>
           <drake:mesh_resolution_hint> 0.01 </drake:mesh_resolution_hint>
-          <drake:mu_dynamic> 0.5 </drake:mu_dynamic>
-          <drake:mu_static> 0.5 </drake:mu_static>
+          <drake:mu_dynamic> 2.0 </drake:mu_dynamic>
+          <drake:mu_static> 2.0 </drake:mu_static>
           <drake:hunt_crossley_dissipation> 3.0 </drake:hunt_crossley_dissipation>
         </drake:proximity_properties>
       </collision>

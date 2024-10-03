@@ -264,6 +264,9 @@
             <scale>1.0 1.0 1.0</scale>
           </mesh>
         </geometry>
+        <drake:proximity_properties>
+          <drake:rigid_hydroelastic/>
+        </drake:proximity_properties>
       </collision>
     </link>
 
@@ -310,6 +313,9 @@
             <scale>1.0 1.0 1.0</scale>
           </mesh>
         </geometry>
+        <drake:proximity_properties>
+          <drake:rigid_hydroelastic/>
+        </drake:proximity_properties>
       </collision>
     </link>
   </model>

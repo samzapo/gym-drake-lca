@@ -796,7 +796,7 @@ class DrakeLcaEnv(DrakeGymEnv):
 
         simulator = Simulator(self.diagram)
         if self.render_mode == "human":
-            simulator.set_target_realtime_rate(2.0)
+            simulator.set_target_realtime_rate(1.0)
         simulator.Initialize()
 
         def monitor(context, gym_time_limit=self.parameters["gym_time_limit"]):
